@@ -1,4 +1,4 @@
-const API_BASE = "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 export async function fetchJson(url, options = {}) {
   const res = await fetch(`${API_BASE}${url}`, {
@@ -91,7 +91,7 @@ export const api = {
   uploadAttachment: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/email/attachments/upload", {
+    const res = await fetch(`${API_BASE}/api/email/attachments/upload`, {
       method: "POST",
       body: formData,
     });
