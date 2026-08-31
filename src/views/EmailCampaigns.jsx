@@ -19,6 +19,8 @@ import {
   Rocket,
   Activity,
   List,
+  Search,
+  CheckSquare,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -43,8 +45,14 @@ export function EmailCampaigns({ onToast, onUpdateBadge, showSmtpModalDirect, on
   // Campaign Form
   const [campName, setCampName] = useState("");
   const [campTemplateId, setCampTemplateId] = useState("");
-  const [campSources, setCampSources] = useState({ sqlite: true, mongo: false, manual: false });
+  const [campSources, setCampSources] = useState({ sqlite: false, mongo: false, manual: false });
   const [campManualEmails, setCampManualEmails] = useState("");
+  const [showRecipientPicker, setShowRecipientPicker] = useState(false);
+  const [pickerRecipients, setPickerRecipients] = useState([]);
+  const [pickerSelection, setPickerSelection] = useState({});
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerSource, setPickerSource] = useState("all");
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [campCountry, setCampCountry] = useState("");
   const [campCategory, setCampCategory] = useState("");
   const [campDelay, setCampDelay] = useState(0.8);
@@ -252,6 +260,69 @@ export function EmailCampaigns({ onToast, onUpdateBadge, showSmtpModalDirect, on
       setPreviewBody(body);
     }
   };
+
+  const loadRecipientPicker = async () => {
+    setShowRecipientPicker(true);
+    setLoadingRecipients(true);
+    try {
+      const [euResponse, leadResponse] = await Promise.all([
+        api.getEUStartups({ page: 1, per_page: 100, has_email: "true" }),
+        api.getLeads(),
+      ]);
+      const euRecipients = (euResponse.data || []).flatMap((startup) =>
+        (startup.people || [])
+          .filter((person) => person.email)
+          .map((person, index) => ({
+            id: `eu-${startup.id}-${person.email}-${index}`,
+            email: person.email.trim(),
+            name: person.name || "Founder / Leadership",
+            company: startup.company_name || "Unnamed startup",
+            source: "eu",
+          }))
+      );
+      const leadRecipients = (leadResponse.leads || leadResponse.data || []).flatMap((lead, leadIndex) =>
+        (lead.contacts || [])
+          .filter((contact) => contact.email)
+          .map((contact, index) => ({
+            id: `linkedin-${lead._id || leadIndex}-${contact.email}-${index}`,
+            email: contact.email.trim(),
+            name: contact.name || "Contact",
+            company: lead.company || "Unnamed company",
+            source: "linkedin",
+          }))
+      );
+      const uniqueRecipients = Array.from(
+        new Map([...euRecipients, ...leadRecipients].map((recipient) => [recipient.email.toLowerCase(), recipient])).values()
+      );
+      setPickerRecipients(uniqueRecipients);
+    } catch (e) {
+      onToast(e.message || "Could not load recipient emails", "error");
+    } finally {
+      setLoadingRecipients(false);
+    }
+  };
+
+  const addSelectedRecipients = () => {
+    const selected = pickerRecipients.filter((recipient) => pickerSelection[recipient.id]);
+    if (!selected.length) {
+      onToast("Tick at least one email to add it to the sending list", "error");
+      return;
+    }
+    const existing = campManualEmails.split(/[\n,]/).map((email) => email.trim()).filter(Boolean);
+    const emails = Array.from(new Set([...existing, ...selected.map((recipient) => recipient.email)]));
+    setCampManualEmails(emails.join("\n"));
+    setCampSources((sources) => ({ ...sources, manual: true }));
+    setEstimatedRecipients(null);
+    setShowRecipientPicker(false);
+    onToast(`${selected.length} email${selected.length === 1 ? "" : "s"} added to the sending list`, "success");
+  };
+
+  const filteredPickerRecipients = pickerRecipients.filter((recipient) => {
+    const matchesSource = pickerSource === "all" || recipient.source === pickerSource;
+    const term = pickerSearch.trim().toLowerCase();
+    const matchesSearch = !term || [recipient.name, recipient.company, recipient.email].some((value) => value.toLowerCase().includes(term));
+    return matchesSource && matchesSearch;
+  });
 
   // Estimate Recipients
   const handleEstimate = async () => {
@@ -779,6 +850,18 @@ export function EmailCampaigns({ onToast, onUpdateBadge, showSmtpModalDirect, on
                     <span className="chip-content">Manual Emails</span>
                   </label>
                 </div>
+                <button
+                  type="button"
+                  onClick={loadRecipientPicker}
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: "0.75rem" }}
+                >
+                  <CheckSquare style={{ width: "13px", height: "13px" }} />
+                  <span>Select individual emails</span>
+                </button>
+                <div style={{ fontSize: "0.73rem", color: "var(--text-muted)", marginTop: "6px" }}>
+                  Tick contacts from EU Startups and LinkedIn Leads, then add them to this campaign's sending list.
+                </div>
               </div>
 
               {campSources.manual && (
@@ -1128,6 +1211,69 @@ export function EmailCampaigns({ onToast, onUpdateBadge, showSmtpModalDirect, on
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showRecipientPicker && (
+        <div className="modal-backdrop" onMouseDown={() => setShowRecipientPicker(false)}>
+          <div
+            className="glass-card modal-dialog"
+            style={{ width: "min(860px, 94vw)", maxWidth: "860px", maxHeight: "82vh", display: "flex", flexDirection: "column" }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0 }}>Select recipients</h3>
+                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Tick only the email addresses you want to add to this sending list.
+                </div>
+              </div>
+              <button className="btn-icon-ghost" onClick={() => setShowRecipientPicker(false)} aria-label="Close recipient picker">
+                <X style={{ width: "18px", height: "18px" }} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap", margin: "1rem 0" }}>
+              <div style={{ position: "relative", flex: "1 1 260px" }}>
+                <Search style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", width: "14px", color: "var(--text-dim)" }} />
+                <input className="eu-input" style={{ paddingLeft: "32px" }} value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Search name, company or email..." />
+              </div>
+              <select value={pickerSource} onChange={(e) => setPickerSource(e.target.value)} style={{ width: "auto" }}>
+                <option value="all">All sources</option>
+                <option value="eu">EU Startups DB</option>
+                <option value="linkedin">LinkedIn Leads DB</option>
+              </select>
+            </div>
+
+            <div className="eu-table-wrapper" style={{ flex: 1, overflow: "auto", minHeight: "220px" }}>
+              <table className="eu-startups-table">
+                <thead><tr><th style={{ width: "42px" }}>Pick</th><th>Contact</th><th>Company</th><th>Email</th><th>Source</th></tr></thead>
+                <tbody>
+                  {loadingRecipients ? (
+                    <tr><td colSpan="5" style={{ textAlign: "center", padding: "42px" }}><div className="spinner" style={{ margin: "auto" }} /></td></tr>
+                  ) : filteredPickerRecipients.length === 0 ? (
+                    <tr><td colSpan="5" style={{ textAlign: "center", padding: "42px", color: "var(--text-muted)" }}>No email contacts found for this filter.</td></tr>
+                  ) : filteredPickerRecipients.map((recipient) => (
+                    <tr key={recipient.id}>
+                      <td><input type="checkbox" checked={!!pickerSelection[recipient.id]} onChange={() => setPickerSelection((selected) => ({ ...selected, [recipient.id]: !selected[recipient.id] }))} /></td>
+                      <td style={{ fontWeight: 600, color: "#fff" }}>{recipient.name}</td>
+                      <td>{recipient.company}</td>
+                      <td style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontSize: "0.78rem" }}>{recipient.email}</td>
+                      <td><span className="platform-badge" style={{ fontSize: "0.68rem" }}>{recipient.source === "eu" ? "EU Startups" : "LinkedIn"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginTop: "1rem" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{Object.values(pickerSelection).filter(Boolean).length} selected</span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowRecipientPicker(false)}>Cancel</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={addSelectedRecipients}>Add to sending list</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
