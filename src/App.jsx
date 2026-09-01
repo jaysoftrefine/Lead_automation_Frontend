@@ -54,11 +54,10 @@ export function App() {
     } catch (e) {}
   };
 
-  useEffect(() => {
-    loadGlobalStats();
-    const interval = setInterval(loadGlobalStats, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  // Global stats polling commented out to avoid repeated network calls
+  // useEffect(() => {
+  //   loadGlobalStats();
+  // }, []);
 
   return (
     <div className="app-container">

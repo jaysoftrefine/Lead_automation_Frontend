@@ -789,7 +789,7 @@ export function EmailCampaigns({
                     ref={bodyTextareaRef}
                     rows="10"
                     className="eu-input"
-                    placeholder="Hi {{first_name}},&#10;&#10;I came across {{company_name}} and was impressed by what you're building in {{city}}...&#10;&#10;Best,&#10;{{sender_name}}"
+                    placeholder="Hi {{name}},&#10;&#10;I came across {{company_name}} and wanted to reach out regarding our B2B solutions.&#10;&#10;Best regards,"
                     value={tplBody}
                     onChange={(e) => setTplBody(e.target.value)}
                   />

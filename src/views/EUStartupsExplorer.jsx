@@ -46,6 +46,7 @@ export function EUStartupsExplorer({ onToast }) {
   const [discoverLimit, setDiscoverLimit] = useState(5);
   const [discovering, setDiscovering] = useState(false);
   const [activeTopics, setActiveTopics] = useState(["AI & Automation"]);
+  const [enrichingId, setEnrichingId] = useState(null);
 
   const topicOptions = [
     "AI & Automation",
@@ -159,13 +160,29 @@ export function EUStartupsExplorer({ onToast }) {
 
   const handleEnrichSingle = async (startupId, companyName) => {
     try {
-      onToast(`Enriching ${companyName}...`, "info");
-      await api.enrichEUStartup(startupId);
-      onToast(`Successfully enriched ${companyName}!`, "success");
+      setEnrichingId(startupId);
+      onToast(`Enriching ${companyName}... searching for verified leadership`, "info");
+      const res = await api.enrichEUStartup(startupId);
+      
+      if (res?.data) {
+        // Immediately update this startup row in local state without full reload
+        setStartups((prev) =>
+          prev.map((s) => (s.id === startupId ? { ...s, ...res.data } : s))
+        );
+      }
+
+      if (res?.people_found > 0) {
+        const topPerson = res.data.people[0];
+        onToast(`✓ Enriched ${companyName}: Found ${topPerson.name} (${topPerson.role})!`, "success");
+      } else {
+        onToast(`${companyName}: No public executive profiles discovered.`, "info");
+      }
+
       loadStats();
-      loadStartups(page);
     } catch (e) {
       onToast(`Enrichment error: ${e.message}`, "error");
+    } finally {
+      setEnrichingId(null);
     }
   };
 
@@ -591,11 +608,26 @@ export function EUStartupsExplorer({ onToast }) {
                           )}
                           <button
                             onClick={() => handleEnrichSingle(s.id, s.company_name)}
+                            disabled={enrichingId === s.id}
                             className="btn btn-secondary btn-sm"
-                            style={{ marginTop: "4px", fontSize: "0.7rem" }}
+                            style={{
+                              marginTop: "4px",
+                              fontSize: "0.7rem",
+                              opacity: enrichingId === s.id ? 0.7 : 1,
+                              cursor: enrichingId === s.id ? "not-allowed" : "pointer"
+                            }}
                           >
-                            <Zap style={{ width: "11px", height: "11px", color: "var(--accent-amber)" }} />
-                            <span>Enrich</span>
+                            {enrichingId === s.id ? (
+                              <>
+                                <div className="spinner" style={{ width: "10px", height: "10px", borderWidth: "1.5px" }} />
+                                <span>Enriching...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Zap style={{ width: "11px", height: "11px", color: "var(--accent-amber)" }} />
+                                <span>Enrich</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </td>
