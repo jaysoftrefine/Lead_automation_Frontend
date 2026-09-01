@@ -12,9 +12,6 @@ export function PipelineRunner({ onToast, onStatusChange }) {
   const [searchTerm, setSearchTerm] = useState("Software Engineer");
   const [location, setLocation] = useState("United States");
   const [resultsLimit, setResultsLimit] = useState(15);
-  const [llmProvider, setLlmProvider] = useState("gemini");
-  const [modelName, setModelName] = useState("gemini-3.5-flash-lite");
-
   const [isRunning, setIsRunning] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState([
     "LeadPulse AI Autonomous Pipeline Ready.",
@@ -48,15 +45,28 @@ export function PipelineRunner({ onToast, onStatusChange }) {
       ]);
 
       const res = await api.startPipeline({
-        platforms: selectedPlatforms,
+        sites: selectedPlatforms,
         search_term: searchTerm.trim(),
         location: location.trim(),
-        results_wanted: parseInt(resultsLimit, 10) || 15,
-        llm_provider: llmProvider,
-        model_name: modelName.trim() || undefined,
+        limit: parseInt(resultsLimit, 10) || 15,
+        company_size: "all",
+        provider: "gemini",
+        is_remote: true,
       });
 
       onToast(res.message || "Pipeline started successfully!", "success");
+      // Trigger status check immediately
+      setTimeout(() => {
+        api.getPipelineStatus().then((statusRes) => {
+          const d = statusRes?.data || statusRes;
+          if (d?.logs) {
+            const formatted = d.logs.map((l) =>
+              typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
+            );
+            setTerminalLogs(formatted);
+          }
+        });
+      }, 200);
     } catch (e) {
       setIsRunning(false);
       if (onStatusChange) onStatusChange(false);
@@ -81,19 +91,22 @@ export function PipelineRunner({ onToast, onStatusChange }) {
     const checkStatus = async () => {
       try {
         const res = await api.getPipelineStatus();
-        if (res.data) {
-          const d = res.data;
-          const running = d.is_running || d.status === "running";
+        const d = res?.data || res;
+        if (d) {
+          const running = Boolean(d.is_running || d.status === "running" || d.status === "scraping" || d.status === "enriching");
           setIsRunning(running);
           if (onStatusChange) onStatusChange(running);
           setMetrics({
-            scraped: d.scraped_count || 0,
-            enriched: d.enriched_count || 0,
+            scraped: d.processed_count || d.scraped_count || 0,
+            enriched: d.metrics?.saved_to_db || d.enriched_count || 0,
             status: d.status || "idle",
           });
 
           if (d.logs && Array.isArray(d.logs) && d.logs.length > 0) {
-            setTerminalLogs(d.logs);
+            const formatted = d.logs.map((l) =>
+              typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
+            );
+            setTerminalLogs(formatted);
           }
         }
       } catch (e) {
@@ -102,8 +115,12 @@ export function PipelineRunner({ onToast, onStatusChange }) {
     };
 
     checkStatus();
-    interval = setInterval(checkStatus, isRunning ? 2000 : 6000);
-    return () => clearInterval(interval);
+    if (isRunning) {
+      interval = setInterval(checkStatus, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isRunning]);
 
   useEffect(() => {
@@ -190,53 +207,20 @@ export function PipelineRunner({ onToast, onStatusChange }) {
             </div>
           </div>
 
-          {/* Limit & LLM Provider */}
-          <div className="form-row">
-            <div className="form-group flex-1">
-              <label htmlFor="limit">Job Scraping Limit</label>
-              <select
-                id="limit"
-                value={resultsLimit}
-                onChange={(e) => setResultsLimit(e.target.value)}
-              >
-                <option value="5">5 Job Postings</option>
-                <option value="10">10 Job Postings</option>
-                <option value="15">15 Job Postings (Recommended)</option>
-                <option value="30">30 Job Postings</option>
-                <option value="50">50 Job Postings</option>
-              </select>
-            </div>
-            <div className="form-group flex-1">
-              <label htmlFor="provider">
-                <Cpu /> LLM Agent Provider
-              </label>
-              <select
-                id="provider"
-                value={llmProvider}
-                onChange={(e) => {
-                  setLlmProvider(e.target.value);
-                  setModelName(
-                    e.target.value === "nvidia"
-                      ? "nvidia/nemotron-3.5-lightning-30b-a3b"
-                      : "gemini-3.5-flash-lite"
-                  );
-                }}
-              >
-                <option value="gemini">Google Gemini (Fast &amp; Accurate)</option>
-                <option value="nvidia">NVIDIA Nemotron 3.5</option>
-              </select>
-            </div>
-          </div>
-
+          {/* Limit */}
           <div className="form-group">
-            <label htmlFor="model">Model Name / Endpoint</label>
-            <input
-              id="model"
-              type="text"
-              className="eu-input"
-              value={modelName}
-              onChange={(e) => setModelName(e.target.value)}
-            />
+            <label htmlFor="limit">Job Scraping Limit</label>
+            <select
+              id="limit"
+              value={resultsLimit}
+              onChange={(e) => setResultsLimit(e.target.value)}
+            >
+              <option value="5">5 Job Postings</option>
+              <option value="10">10 Job Postings</option>
+              <option value="15">15 Job Postings (Recommended)</option>
+              <option value="30">30 Job Postings</option>
+              <option value="50">50 Job Postings</option>
+            </select>
           </div>
 
           {/* Actions */}
