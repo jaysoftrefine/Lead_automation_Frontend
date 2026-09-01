@@ -325,7 +325,9 @@ export function EmailCampaigns({
             name: contact.name || "Contact",
             company: lead.company || "Unnamed company",
             role: contact.role || "Professional",
-            website: lead.company_domain ? `https://${lead.company_domain}` : "",
+            website: lead.company_domain
+              ? `https://${lead.company_domain}`
+              : "",
             city: "",
             country: lead.location || "",
             category: "",
@@ -393,7 +395,10 @@ export function EmailCampaigns({
       (k) => campSources[k],
     );
     if (selectedSources.length === 0 && selectedContacts.length === 0) {
-      onToast("Select at least one audience source or pick specific contacts", "error");
+      onToast(
+        "Select at least one audience source or pick specific contacts",
+        "error",
+      );
       return;
     }
     setEstimating(true);
@@ -408,7 +413,9 @@ export function EmailCampaigns({
         });
         dbEstimate = res.data?.estimated_recipients || 0;
       }
-      const totalEst = dbEstimate + (selectedSources.length === 0 ? selectedContacts.length : 0);
+      const totalEst =
+        dbEstimate +
+        (selectedSources.length === 0 ? selectedContacts.length : 0);
       setEstimatedRecipients(totalEst);
     } catch (e) {
       onToast(e.message, "error");
@@ -465,14 +472,18 @@ export function EmailCampaigns({
     const hasSelected = selectedContacts.length > 0;
 
     if (!hasDbSources && !hasManual && !hasSelected) {
-      onToast("Select at least one audience source or pick specific contacts", "error");
+      onToast(
+        "Select at least one audience source or pick specific contacts",
+        "error",
+      );
       return;
     }
 
     const selectedSources = [];
     if (campSources.sqlite) selectedSources.push("sqlite");
     if (campSources.mongo) selectedSources.push("mongo");
-    if (campSources.manual && campManualEmails.trim()) selectedSources.push("manual");
+    if (campSources.manual && campManualEmails.trim())
+      selectedSources.push("manual");
     if (hasSelected) selectedSources.push("selected");
 
     const manualEmails = campManualEmails
@@ -1029,7 +1040,11 @@ export function EmailCampaigns({
                     type="button"
                     onClick={() => setActivePanel("templates")}
                     className="btn-icon-ghost"
-                    style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", padding: "2px 6px" }}
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--accent-cyan)",
+                      padding: "2px 6px",
+                    }}
                   >
                     + Manage templates
                   </button>
@@ -1073,7 +1088,9 @@ export function EmailCampaigns({
                         setCampSources((p) => ({ ...p, mongo: !p.mongo }))
                       }
                     />
-                    <span className="chip-content">LinkedIn Leads DB (All)</span>
+                    <span className="chip-content">
+                      LinkedIn Leads DB (All)
+                    </span>
                   </label>
                   <label className="checkbox-chip">
                     <input
@@ -1114,13 +1131,19 @@ export function EmailCampaigns({
                         style={{
                           fontWeight: 600,
                           fontSize: "0.86rem",
-                          color: "#fff",
+                          color: "var(--text-primary)",
                           display: "flex",
                           alignItems: "center",
                           gap: "6px",
                         }}
                       >
-                        <Users style={{ width: "15px", height: "15px", color: "var(--accent-cyan)" }} />
+                        <Users
+                          style={{
+                            width: "15px",
+                            height: "15px",
+                            color: "var(--accent-cyan)",
+                          }}
+                        />
                         <span>Partially Select Specific Emails / Contacts</span>
                       </div>
                       <div
@@ -1130,7 +1153,8 @@ export function EmailCampaigns({
                           marginTop: "2px",
                         }}
                       >
-                        Handpick specific contacts from EU Startups &amp; LinkedIn Leads
+                        Handpick specific contacts from EU Startups &amp;
+                        LinkedIn Leads
                       </div>
                     </div>
                     <button
@@ -1166,8 +1190,14 @@ export function EmailCampaigns({
                           fontSize: "0.76rem",
                         }}
                       >
-                        <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>
-                          ✓ {selectedContacts.length} recipient{selectedContacts.length === 1 ? "" : "s"} selected
+                        <span
+                          style={{
+                            color: "var(--accent-cyan)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          ✓ {selectedContacts.length} recipient
+                          {selectedContacts.length === 1 ? "" : "s"} selected
                         </span>
                         <button
                           type="button"
@@ -1210,7 +1240,12 @@ export function EmailCampaigns({
                               color: "var(--text-secondary)",
                             }}
                           >
-                            <span style={{ color: "#fff", fontWeight: 500 }}>
+                            <span
+                              style={{
+                                color: "var(--text-primary)",
+                                fontWeight: 500,
+                              }}
+                            >
                               {contact.name || contact.company}
                             </span>
                             <span
@@ -1226,7 +1261,7 @@ export function EmailCampaigns({
                               type="button"
                               onClick={() =>
                                 setSelectedContacts((prev) =>
-                                  prev.filter((c) => c.id !== contact.id)
+                                  prev.filter((c) => c.id !== contact.id),
                                 )
                               }
                               style={{
@@ -1321,7 +1356,9 @@ export function EmailCampaigns({
               </div>
 
               {/* Action Buttons */}
-              <div style={{ display: "flex", gap: "10px", marginTop: "1.25rem" }}>
+              <div
+                style={{ display: "flex", gap: "10px", marginTop: "1.25rem" }}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -1379,7 +1416,15 @@ export function EmailCampaigns({
               </div>
             </div>
 
-            <div style={{ marginTop: "1rem", flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+              }}
+            >
               {/* Readiness Checklist */}
               <div
                 style={{
@@ -1392,13 +1437,25 @@ export function EmailCampaigns({
                   style={{
                     padding: "0.6rem 0.8rem",
                     borderRadius: "var(--radius-sm)",
-                    background: campName.trim() ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)",
+                    background: campName.trim()
+                      ? "rgba(16,185,129,0.1)"
+                      : "rgba(255,255,255,0.04)",
                     border: `1px solid ${campName.trim() ? "rgba(16,185,129,0.3)" : "var(--border-subtle)"}`,
                     fontSize: "0.74rem",
                   }}
                 >
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}>Campaign Name</div>
-                  <div style={{ fontWeight: 600, color: campName.trim() ? "#10b981" : "var(--text-dim)", marginTop: "2px" }}>
+                  <div
+                    style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}
+                  >
+                    Campaign Name
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color: campName.trim() ? "#10b981" : "var(--text-dim)",
+                      marginTop: "2px",
+                    }}
+                  >
                     {campName.trim() ? "✓ Named" : "⚠ Missing"}
                   </div>
                 </div>
@@ -1407,13 +1464,25 @@ export function EmailCampaigns({
                   style={{
                     padding: "0.6rem 0.8rem",
                     borderRadius: "var(--radius-sm)",
-                    background: campTemplateId ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)",
+                    background: campTemplateId
+                      ? "rgba(16,185,129,0.1)"
+                      : "rgba(255,255,255,0.04)",
                     border: `1px solid ${campTemplateId ? "rgba(16,185,129,0.3)" : "var(--border-subtle)"}`,
                     fontSize: "0.74rem",
                   }}
                 >
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}>Email Template</div>
-                  <div style={{ fontWeight: 600, color: campTemplateId ? "#10b981" : "var(--text-dim)", marginTop: "2px" }}>
+                  <div
+                    style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}
+                  >
+                    Email Template
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color: campTemplateId ? "#10b981" : "var(--text-dim)",
+                      marginTop: "2px",
+                    }}
+                  >
                     {campTemplateId ? "✓ Selected" : "⚠ Choose"}
                   </div>
                 </div>
@@ -1422,16 +1491,40 @@ export function EmailCampaigns({
                   style={{
                     padding: "0.6rem 0.8rem",
                     borderRadius: "var(--radius-sm)",
-                    background: (campSources.sqlite || campSources.mongo || campSources.manual || selectedContacts.length > 0) ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)",
-                    border: `1px solid ${(campSources.sqlite || campSources.mongo || campSources.manual || selectedContacts.length > 0) ? "rgba(16,185,129,0.3)" : "var(--border-subtle)"}`,
+                    background:
+                      campSources.sqlite ||
+                      campSources.mongo ||
+                      campSources.manual ||
+                      selectedContacts.length > 0
+                        ? "rgba(16,185,129,0.1)"
+                        : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${campSources.sqlite || campSources.mongo || campSources.manual || selectedContacts.length > 0 ? "rgba(16,185,129,0.3)" : "var(--border-subtle)"}`,
                     fontSize: "0.74rem",
                   }}
                 >
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}>Audience</div>
-                  <div style={{ fontWeight: 600, color: (campSources.sqlite || campSources.mongo || campSources.manual || selectedContacts.length > 0) ? "#10b981" : "var(--text-dim)", marginTop: "2px" }}>
+                  <div
+                    style={{ color: "var(--text-muted)", fontSize: "0.68rem" }}
+                  >
+                    Audience
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color:
+                        campSources.sqlite ||
+                        campSources.mongo ||
+                        campSources.manual ||
+                        selectedContacts.length > 0
+                          ? "#10b981"
+                          : "var(--text-dim)",
+                      marginTop: "2px",
+                    }}
+                  >
                     {selectedContacts.length > 0
                       ? `✓ ${selectedContacts.length} Contacts`
-                      : (campSources.sqlite || campSources.mongo || campSources.manual)
+                      : campSources.sqlite ||
+                          campSources.mongo ||
+                          campSources.manual
                         ? "✓ Sources Set"
                         : "⚠ Unselected"}
                   </div>
@@ -1453,16 +1546,36 @@ export function EmailCampaigns({
                   }}
                 >
                   <div>
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                       Selected Template:
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Selected Template:
                     </span>
-                    <h4 style={{ color: "var(--text-primary)", margin: "2px 0 0" }}>
-                      {templates.find((t) => t.id === campTemplateId)?.name || "Template"}
+                    <h4
+                      style={{
+                        color: "var(--text-primary)",
+                        margin: "2px 0 0",
+                      }}
+                    >
+                      {templates.find((t) => t.id === campTemplateId)?.name ||
+                        "Template"}
                     </h4>
                   </div>
 
                   <div>
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
                       Subject:
                     </span>
                     <div
@@ -1477,11 +1590,13 @@ export function EmailCampaigns({
                         marginTop: "2px",
                       }}
                     >
-                      {templates.find((t) => t.id === campTemplateId)?.subject || "(No subject)"}
+                      {templates.find((t) => t.id === campTemplateId)
+                        ?.subject || "(No subject)"}
                     </div>
                   </div>
 
-                  {templates.find((t) => t.id === campTemplateId)?.attachment_name && (
+                  {templates.find((t) => t.id === campTemplateId)
+                    ?.attachment_name && (
                     <div
                       style={{
                         display: "inline-flex",
@@ -1497,12 +1612,25 @@ export function EmailCampaigns({
                       }}
                     >
                       <Paperclip style={{ width: "12px", height: "12px" }} />
-                      <span>Attachment: {templates.find((t) => t.id === campTemplateId)?.attachment_name}</span>
+                      <span>
+                        Attachment:{" "}
+                        {
+                          templates.find((t) => t.id === campTemplateId)
+                            ?.attachment_name
+                        }
+                      </span>
                     </div>
                   )}
 
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
                       Body Preview:
                     </span>
                     <div
@@ -1520,7 +1648,8 @@ export function EmailCampaigns({
                         lineHeight: 1.5,
                       }}
                     >
-                      {templates.find((t) => t.id === campTemplateId)?.body || "(Empty body)"}
+                      {templates.find((t) => t.id === campTemplateId)?.body ||
+                        "(Empty body)"}
                     </div>
                   </div>
                 </div>
@@ -1540,7 +1669,14 @@ export function EmailCampaigns({
                     border: "1px dashed var(--border-subtle)",
                   }}
                 >
-                  <FileText style={{ width: "36px", height: "36px", marginBottom: "10px", opacity: 0.5 }} />
+                  <FileText
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      marginBottom: "10px",
+                      opacity: 0.5,
+                    }}
+                  />
                   <p style={{ fontSize: "0.85rem", margin: 0 }}>
                     Select an email template from the left to preview it here
                   </p>
@@ -1582,7 +1718,14 @@ export function EmailCampaigns({
               </button>
             </div>
 
-            <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.2rem",
+              }}
+            >
               {/* Campaign Summary Card */}
               <div
                 style={{
@@ -1592,20 +1735,45 @@ export function EmailCampaigns({
                   border: "1px solid rgba(99, 102, 241, 0.25)",
                 }}
               >
-                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
                   Ready to Launch:
                 </div>
-                <h3 style={{ fontSize: "1.1rem", color: "#fff", margin: "4px 0" }}>
+                <h3
+                  style={{
+                    fontSize: "1.1rem",
+                    color: "var(--text-primary)",
+                    margin: "4px 0",
+                  }}
+                >
                   {campName.trim() || "Untitled Campaign"}
                 </h3>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "6px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                    fontSize: "0.78rem",
+                    color: "var(--text-secondary)",
+                    marginTop: "6px",
+                  }}
+                >
                   <span>
-                    📄 Template: <strong style={{ color: "var(--accent-cyan)" }}>
-                      {templates.find((t) => t.id === campTemplateId)?.name || "None selected"}
+                    📄 Template:{" "}
+                    <strong style={{ color: "var(--accent-cyan)" }}>
+                      {templates.find((t) => t.id === campTemplateId)?.name ||
+                        "None selected"}
                     </strong>
                   </span>
                   <span>
-                    👥 Target: <strong style={{ color: "var(--accent-emerald)" }}>
+                    👥 Target:{" "}
+                    <strong style={{ color: "var(--accent-emerald)" }}>
                       {selectedContacts.length > 0
                         ? `${selectedContacts.length} handpicked contacts`
                         : estimatedRecipients !== null
@@ -1626,10 +1794,19 @@ export function EmailCampaigns({
                   <option value={0.5}>0.5s (Fast — ~120 emails/min)</option>
                   <option value={0.8}>0.8s (Standard — ~75 emails/min)</option>
                   <option value={1.5}>1.5s (Safe — ~40 emails/min)</option>
-                  <option value={3.0}>3.0s (Conservative — ~20 emails/min)</option>
+                  <option value={3.0}>
+                    3.0s (Conservative — ~20 emails/min)
+                  </option>
                 </select>
-                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
-                  Adjust spacing between consecutive emails to preserve high inbox deliverability.
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--text-dim)",
+                    marginTop: "4px",
+                  }}
+                >
+                  Adjust spacing between consecutive emails to preserve high
+                  inbox deliverability.
                 </div>
               </div>
 
@@ -1642,7 +1819,15 @@ export function EmailCampaigns({
                   border: "1px solid var(--border-subtle)",
                 }}
               >
-                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "#fff", marginBottom: "6px", display: "block" }}>
+                <label
+                  style={{
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    marginBottom: "6px",
+                    display: "block",
+                  }}
+                >
                   Send a Verification Test Email First
                 </label>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -1745,7 +1930,9 @@ export function EmailCampaigns({
                     }}
                   />
                   <p>
-                    Click <strong>Launch Bulk Outreach Campaign</strong> on the left. Progress and delivery status will animate here in real-time.
+                    Click <strong>Launch Bulk Outreach Campaign</strong> on the
+                    left. Progress and delivery status will animate here in
+                    real-time.
                   </p>
                 </div>
               )}
@@ -1762,7 +1949,7 @@ export function EmailCampaigns({
                     <h3
                       style={{
                         fontSize: "1.05rem",
-                        color: "#fff",
+                        color: "var(--text-primary)",
                         marginBottom: "4px",
                       }}
                     >
@@ -1798,7 +1985,7 @@ export function EmailCampaigns({
                       <span
                         style={{
                           fontFamily: "var(--font-mono)",
-                          color: "#fff",
+                          color: "var(--text-primary)",
                         }}
                       >
                         {(campaignProgress.sent || 0) +
@@ -1909,7 +2096,12 @@ export function EmailCampaigns({
                   campaigns.map((c) => (
                     <tr key={c.id}>
                       <td>
-                        <div style={{ fontWeight: 700, color: "#fff" }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            color: "var(--text-primary)",
+                          }}
+                        >
                           {c.name}
                         </div>
                       </td>
@@ -2095,8 +2287,21 @@ export function EmailCampaigns({
           >
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Users style={{ width: "18px", height: "18px", color: "var(--accent-cyan)" }} />
+                <h3
+                  style={{
+                    margin: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <Users
+                    style={{
+                      width: "18px",
+                      height: "18px",
+                      color: "var(--accent-cyan)",
+                    }}
+                  />
                   <span>Partially Select Campaign Recipients</span>
                 </h3>
                 <div
@@ -2106,7 +2311,8 @@ export function EmailCampaigns({
                     marginTop: "4px",
                   }}
                 >
-                  Choose exactly which contacts from EU Startups and LinkedIn Leads should receive this campaign.
+                  Choose exactly which contacts from EU Startups and LinkedIn
+                  Leads should receive this campaign.
                 </div>
               </div>
               <button
@@ -2153,12 +2359,20 @@ export function EmailCampaigns({
                 onChange={(e) => setPickerSource(e.target.value)}
                 style={{ width: "auto" }}
               >
-                <option value="all">All Sources ({pickerRecipients.length})</option>
+                <option value="all">
+                  All Sources ({pickerRecipients.length})
+                </option>
                 <option value="eu">
-                  EU Startups ({pickerRecipients.filter((r) => r.source === "eu").length})
+                  EU Startups (
+                  {pickerRecipients.filter((r) => r.source === "eu").length})
                 </option>
                 <option value="linkedin">
-                  LinkedIn Leads ({pickerRecipients.filter((r) => r.source === "linkedin").length})
+                  LinkedIn Leads (
+                  {
+                    pickerRecipients.filter((r) => r.source === "linkedin")
+                      .length
+                  }
+                  )
                 </option>
               </select>
 
@@ -2222,7 +2436,11 @@ export function EmailCampaigns({
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", color: "var(--accent-rose)" }}
+                  style={{
+                    fontSize: "0.72rem",
+                    padding: "0.25rem 0.6rem",
+                    color: "var(--accent-rose)",
+                  }}
                   onClick={() => setPickerSelection({})}
                 >
                   Deselect All
@@ -2243,7 +2461,9 @@ export function EmailCampaigns({
                         type="checkbox"
                         checked={
                           filteredPickerRecipients.length > 0 &&
-                          filteredPickerRecipients.every((r) => !!pickerSelection[r.id])
+                          filteredPickerRecipients.every(
+                            (r) => !!pickerSelection[r.id],
+                          )
                         }
                         onChange={(e) => {
                           const checked = e.target.checked;
@@ -2270,7 +2490,13 @@ export function EmailCampaigns({
                         style={{ textAlign: "center", padding: "48px" }}
                       >
                         <div className="spinner" style={{ margin: "auto" }} />
-                        <div style={{ marginTop: "10px", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            fontSize: "0.8rem",
+                            color: "var(--text-muted)",
+                          }}
+                        >
                           Loading contacts from EU Startups and LinkedIn DB...
                         </div>
                       </td>
@@ -2295,7 +2521,9 @@ export function EmailCampaigns({
                         <tr
                           key={recipient.id}
                           style={{
-                            background: isSelected ? "rgba(99, 102, 241, 0.08)" : undefined,
+                            background: isSelected
+                              ? "rgba(99, 102, 241, 0.08)"
+                              : undefined,
                             cursor: "pointer",
                           }}
                           onClick={() =>
@@ -2321,25 +2549,47 @@ export function EmailCampaigns({
                             />
                           </td>
                           <td>
-                            <div style={{ fontWeight: 600, color: "#fff" }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: "var(--text-primary)",
+                              }}
+                            >
                               {recipient.name}
                             </div>
                             {recipient.role && (
-                              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                              <div
+                                style={{
+                                  fontSize: "0.72rem",
+                                  color: "var(--text-dim)",
+                                }}
+                              >
                                 {recipient.role}
                               </div>
                             )}
                           </td>
                           <td>
-                            <div style={{ fontWeight: 500 }}>{recipient.company}</div>
+                            <div style={{ fontWeight: 500 }}>
+                              {recipient.company}
+                            </div>
                             {recipient.category && (
-                              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                              <div
+                                style={{
+                                  fontSize: "0.7rem",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
                                 {recipient.category}
                               </div>
                             )}
                           </td>
                           <td>
-                            <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                            <span
+                              style={{
+                                fontSize: "0.78rem",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
                               {recipient.country || recipient.city || "—"}
                             </span>
                           </td>
@@ -2368,7 +2618,9 @@ export function EmailCampaigns({
                                     ? "rgba(139, 92, 246, 0.35)"
                                     : "rgba(59, 130, 246, 0.35)",
                                 color:
-                                  recipient.source === "eu" ? "#c084fc" : "#60a5fa",
+                                  recipient.source === "eu"
+                                    ? "#c084fc"
+                                    : "#60a5fa",
                               }}
                             >
                               {recipient.source === "eu"
@@ -2396,7 +2648,9 @@ export function EmailCampaigns({
                 borderTop: "1px solid var(--border-subtle)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
                 <span
                   style={{
                     fontSize: "0.82rem",
@@ -2404,7 +2658,8 @@ export function EmailCampaigns({
                     color: "var(--accent-cyan)",
                   }}
                 >
-                  {Object.values(pickerSelection).filter(Boolean).length} contacts selected
+                  {Object.values(pickerSelection).filter(Boolean).length}{" "}
+                  contacts selected
                 </span>
                 <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                   (out of {pickerRecipients.length} available)
@@ -2426,7 +2681,8 @@ export function EmailCampaigns({
                 >
                   <CheckSquare style={{ width: "13px", height: "13px" }} />
                   <span>
-                    Apply Selection ({Object.values(pickerSelection).filter(Boolean).length})
+                    Apply Selection (
+                    {Object.values(pickerSelection).filter(Boolean).length})
                   </span>
                 </button>
               </div>
