@@ -283,7 +283,7 @@ export function PipelineRunner({ onToast, onStatusChange }) {
           <div className="camp-stat-pill success">
             <span>{metrics.enriched}</span> Enriched Leads
           </div>
-          <div className="camp-stat-pill" style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-secondary)" }}>
+          <div className="camp-stat-pill" style={{ background: "var(--chip-bg)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
             Status: <span style={{ textTransform: "capitalize", marginLeft: "4px" }}>{metrics.status}</span>
           </div>
         </div>

@@ -193,7 +193,7 @@ export function EUStartupsExplorer({ onToast }) {
           <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
             Total Startups
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#fff", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--text-primary)", marginTop: "4px" }}>
             {(stats.total || 0).toLocaleString()}
           </div>
         </div>
@@ -368,8 +368,8 @@ export function EUStartupsExplorer({ onToast }) {
                 <th>Company</th>
                 <th>Location</th>
                 <th>Category</th>
-                <th>Founded</th>
-                <th>Scraped</th>
+                <th>Funding / Stage</th>
+                <th>Employees</th>
                 <th>Tags</th>
                 <th>People &amp; Roles</th>
                 <th>Contacts</th>
@@ -405,13 +405,13 @@ export function EUStartupsExplorer({ onToast }) {
                     <tr key={s.id}>
                       {/* Company */}
                       <td>
-                        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#fff" }}>
+                        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
                           {s.website ? (
                             <a
                               href={s.website}
                               target="_blank"
                               rel="noreferrer"
-                              style={{ color: "#fff", textDecoration: "none" }}
+                              style={{ color: "var(--text-primary)", textDecoration: "none" }}
                             >
                               {s.company_name || "Unnamed Startup"}
                             </a>
@@ -428,26 +428,28 @@ export function EUStartupsExplorer({ onToast }) {
                               maxHeight: "44px",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              lineHeight: 1.4,
                             }}
                           >
-                            {s.description.slice(0, 120)}...
+                            {s.description}
                           </div>
                         )}
                       </td>
 
                       {/* Location */}
                       <td>
-                        <div>{s.city || "—"}</div>
-                        {s.state && <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{s.state}</div>}
-                        <span className="platform-badge" style={{ fontSize: "0.68rem", marginTop: "3px" }}>
-                          {s.country || "Europe"}
+                        <span className="platform-badge" style={{ fontSize: "0.7rem", textTransform: "none" }}>
+                          {s.country || "Global"}
                         </span>
                       </td>
 
                       {/* Category */}
                       <td>
                         {s.category ? (
-                          <span className="platform-badge accent" style={{ fontSize: "0.7rem" }}>
+                          <span className="platform-badge accent" style={{ fontSize: "0.7rem", textTransform: "none" }}>
                             {s.category}
                           </span>
                         ) : (
@@ -455,44 +457,21 @@ export function EUStartupsExplorer({ onToast }) {
                         )}
                       </td>
 
-                      {/* Founded Year (Distinct Column) */}
+                      {/* Funding / Stage */}
                       <td>
-                        <div
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            fontWeight: 700,
-                            color: "var(--accent-cyan)",
-                            fontSize: "0.86rem",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <Calendar style={{ width: "13px", height: "13px", color: "var(--accent-cyan)" }} />
-                          <span>{s.founded_year || "—"}</span>
+                        <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--accent-emerald)" }}>
+                          {s.funding_total ? `${s.funding_total}` : "Undisclosed"}
                         </div>
+                        {s.stage && (
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>
+                            {s.stage}
+                          </div>
+                        )}
                       </td>
 
-                      {/* Scraped Date (Distinct Column) */}
-                      <td>
-                        {s.created_at ? (
-                          <div
-                            style={{
-                              fontSize: "0.76rem",
-                              color: "var(--text-muted)",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "3px",
-                              whiteSpace: "nowrap",
-                            }}
-                            title={`Scraped at ${s.created_at}`}
-                          >
-                            <Clock style={{ width: "11px", height: "11px", color: "var(--text-dim)" }} />
-                            <span>{formatScrapedDate(s.created_at)}</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: "var(--text-dim)" }}>—</span>
-                        )}
+                      {/* Employees */}
+                      <td style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                        {s.employees ? `${s.employees} people` : "—"}
                       </td>
 
                       {/* Tags */}
@@ -505,7 +484,8 @@ export function EUStartupsExplorer({ onToast }) {
                                 style={{
                                   fontSize: "0.68rem",
                                   padding: "2px 6px",
-                                  background: "rgba(255,255,255,0.04)",
+                                  background: "var(--chip-bg)",
+                                  border: "1px solid var(--border-subtle)",
                                   borderRadius: "4px",
                                   color: "var(--text-secondary)",
                                 }}
@@ -532,12 +512,13 @@ export function EUStartupsExplorer({ onToast }) {
                                 style={{
                                   marginBottom: "6px",
                                   padding: "6px",
-                                  background: "rgba(255,255,255,0.03)",
+                                  background: "var(--chip-bg)",
+                                  border: "1px solid var(--border-subtle)",
                                   borderRadius: "6px",
                                   fontSize: "0.78rem",
                                 }}
                               >
-                                <div style={{ fontWeight: 700, color: "#fff" }}>{p.name || "Founder / Leadership"}</div>
+                                <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{p.name || "Founder / Leadership"}</div>
                                 {p.role && <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{p.role}</div>}
                                 {p.email && (
                                   <div

@@ -9,6 +9,9 @@ import { EmailCampaigns } from "./views/EmailCampaigns";
 import { api } from "./services/api";
 
 export function App() {
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("leadpulse_theme") || "light";
+  });
   const [activeTab, setActiveTab] = useState("pipeline");
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [leadsCount, setLeadsCount] = useState(0);
@@ -16,6 +19,15 @@ export function App() {
   const [templatesCount, setTemplatesCount] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [showSmtpModal, setShowSmtpModal] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("leadpulse_theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
 
   const showToast = (message, type = "info") => {
     const id = Date.now() + Math.random();
@@ -54,6 +66,8 @@ export function App() {
       <Header
         onOpenSmtp={() => setShowSmtpModal(true)}
         isPipelineRunning={isPipelineRunning}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Tab Navigation */}

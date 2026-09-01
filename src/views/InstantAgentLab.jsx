@@ -117,7 +117,8 @@ export function InstantAgentLab({ onToast }) {
               {/* Report Body */}
               <div
                 style={{
-                  background: "rgba(255,255,255,0.03)",
+                  background: "var(--chip-bg)",
+                  color: "var(--text-primary)",
                   padding: "1.1rem",
                   borderRadius: "var(--radius-md)",
                   border: "1px solid var(--border-subtle)",
@@ -138,12 +139,12 @@ export function InstantAgentLab({ onToast }) {
                         key={i}
                         style={{
                           padding: "10px",
-                          background: "rgba(15,23,42,0.8)",
+                          background: "var(--chip-bg)",
                           border: "1px solid var(--border-subtle)",
                           borderRadius: "8px",
                         }}
                       >
-                        <div style={{ fontWeight: 700, color: "#fff" }}>{lead.name || "Founder"}</div>
+                        <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{lead.name || "Founder"}</div>
                         <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
                           {lead.role} • {lead.company}
                         </div>

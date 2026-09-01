@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Zap, Settings, ShieldCheck, Clock } from "lucide-react";
+import { Zap, Settings, Clock, Sun, Moon } from "lucide-react";
 
-export function Header({ stats, onOpenSmtp, isPipelineRunning }) {
+export function Header({ stats, onOpenSmtp, isPipelineRunning, theme, onToggleTheme }) {
   const [timeStr, setTimeStr] = useState("");
   const [dateStr, setDateStr] = useState("");
 
@@ -23,13 +23,16 @@ export function Header({ stats, onOpenSmtp, isPipelineRunning }) {
     return () => clearInterval(timer);
   }, []);
 
+  const isLight = theme === "light";
+
   return (
-    <header className="glass-card" style={{ padding: "0.9rem 1.25rem" }}>
+    <header className="glass-card header-bar" style={{ padding: "0.9rem 1.25rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
         
         {/* Left: Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
           <div
+            className="brand-logo-icon"
             style={{
               width: "38px",
               height: "38px",
@@ -62,33 +65,31 @@ export function Header({ stats, onOpenSmtp, isPipelineRunning }) {
         <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
           {/* Status Indicator */}
           <div
+            className="header-pill status-pill"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "6px",
               padding: "0.35rem 0.75rem",
               borderRadius: "var(--radius-full)",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid var(--border-subtle)",
               fontSize: "0.78rem",
             }}
           >
             <span className={`pulse-dot ${isPipelineRunning ? "running" : ""}`} />
-            <span style={{ color: isPipelineRunning ? "#10b981" : "var(--text-muted)", fontWeight: 600 }}>
+            <span style={{ color: isPipelineRunning ? "var(--accent-emerald)" : "var(--text-muted)", fontWeight: 600 }}>
               {isPipelineRunning ? "Pipeline Running" : "Engine Ready"}
             </span>
           </div>
 
           {/* Clock */}
           <div
+            className="header-pill clock-pill"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "6px",
               padding: "0.35rem 0.75rem",
               borderRadius: "var(--radius-full)",
-              background: "rgba(15,23,42,0.6)",
-              border: "1px solid var(--border-subtle)",
               fontSize: "0.78rem",
               fontFamily: "var(--font-mono)",
               color: "var(--text-secondary)",
@@ -98,6 +99,25 @@ export function Header({ stats, onOpenSmtp, isPipelineRunning }) {
             <span>{timeStr || "12:00:00"}</span>
             <span style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>• {dateStr}</span>
           </div>
+
+          {/* Theme Switcher Toggle */}
+          <button
+            onClick={onToggleTheme}
+            className="theme-toggle-btn"
+            title={`Switch to ${isLight ? "Dark" : "Light"} Theme`}
+            aria-label="Toggle Theme"
+          >
+            <div className="theme-toggle-icon-wrap">
+              {isLight ? (
+                <Sun className="theme-icon sun-icon" style={{ width: "15px", height: "15px", color: "#f59e0b" }} />
+              ) : (
+                <Moon className="theme-icon moon-icon" style={{ width: "15px", height: "15px", color: "#818cf8" }} />
+              )}
+            </div>
+            <span className="theme-toggle-label">
+              {isLight ? "Light Mode" : "Dark Mode"}
+            </span>
+          </button>
 
           {/* SMTP Settings Quick Button */}
           <button

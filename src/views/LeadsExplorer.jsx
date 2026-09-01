@@ -164,7 +164,7 @@ export function LeadsExplorer({ onToast }) {
               filteredLeads.map((lead, idx) => (
                 <tr key={lead._id || idx}>
                   <td>
-                    <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>
+                    <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
                       {lead.company || "Unnamed Company"}
                     </div>
                     {lead.company_domain && (
@@ -200,12 +200,13 @@ export function LeadsExplorer({ onToast }) {
                           style={{
                             marginBottom: "4px",
                             padding: "4px 8px",
-                            background: "rgba(255,255,255,0.03)",
+                            background: "var(--chip-bg)",
+                            border: "1px solid var(--border-subtle)",
                             borderRadius: "6px",
                             fontSize: "0.8rem",
                           }}
                         >
-                          <span style={{ fontWeight: 600, color: "#fff" }}>{c.name || "Executive"}</span>
+                          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{c.name || "Executive"}</span>
                           {c.role && <span style={{ color: "var(--text-muted)", marginLeft: "4px" }}>({c.role})</span>}
                           {c.email && (
                             <div style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
@@ -286,7 +287,8 @@ export function LeadsExplorer({ onToast }) {
                       key={i}
                       style={{
                         padding: "8px",
-                        background: "rgba(255,255,255,0.04)",
+                        background: "var(--chip-bg)",
+                        border: "1px solid var(--border-subtle)",
                         borderRadius: "8px",
                         marginBottom: "6px",
                       }}
@@ -304,7 +306,7 @@ export function LeadsExplorer({ onToast }) {
                           href={c.linkedin}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ color: "#818cf8", fontSize: "0.78rem" }}
+                          style={{ color: "var(--accent-indigo)", fontSize: "0.78rem" }}
                         >
                           LinkedIn Profile →
                         </a>
@@ -319,12 +321,13 @@ export function LeadsExplorer({ onToast }) {
                   <h4 style={{ marginBottom: "0.4rem", color: "var(--accent-emerald)" }}>AI Thinking &amp; Reasoning</h4>
                   <pre
                     style={{
-                      background: "#05070c",
+                      background: "var(--terminal-bg)",
+                      border: "1px solid var(--border-subtle)",
                       padding: "10px",
                       borderRadius: "8px",
                       fontSize: "0.78rem",
                       whiteSpace: "pre-wrap",
-                      color: "#a5f3fc",
+                      color: "var(--terminal-text)",
                       maxHeight: "200px",
                       overflowY: "auto",
                     }}
