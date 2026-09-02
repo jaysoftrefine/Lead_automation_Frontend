@@ -77,7 +77,7 @@ export function LeadsExplorer({ onToast }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div className="card-title-group">
           <Database style={{ width: "18px", height: "18px", color: "var(--accent-cyan)" }} />
-          <h2>Discovered MongoDB Leads ({filteredLeads.length})</h2>
+          <h2>Discovered Leads ({filteredLeads.length})</h2>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>

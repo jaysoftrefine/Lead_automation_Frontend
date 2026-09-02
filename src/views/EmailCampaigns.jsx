@@ -2485,7 +2485,7 @@ export function EmailCampaigns({
                         }
                       />
                       <span className="chip-content" style={{ fontWeight: 500 }}>
-                        LinkedIn Leads (MongoDB)
+                        LinkedIn Leads (SQLite)
                       </span>
                     </label>
 
@@ -2827,7 +2827,7 @@ export function EmailCampaigns({
                           <td colSpan={6} style={{ textAlign: "center", padding: "50px 20px" }}>
                             <div className="spinner" style={{ margin: "0 auto 12px" }} />
                             <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                              Loading leads from SQLite &amp; MongoDB...
+                              Loading leads from SQLite...
                             </span>
                           </td>
                         </tr>
@@ -2936,7 +2936,7 @@ export function EmailCampaigns({
                                       fontWeight: 600,
                                     }}
                                   >
-                                    {c.source === "sqlite" ? "SQLite" : "MongoDB"}
+                                    {c.source === "sqlite" ? "EU Startups" : "Job Leads"}
                                   </span>
                                   {c.country && (
                                     <span
@@ -5522,7 +5522,7 @@ export function EmailCampaigns({
                   />
                   <span>
                     {pickerTarget === "audience"
-                      ? "Partially Select Audience Companies (SQLite & MongoDB)"
+                      ? "Partially Select Audience Companies"
                       : "Partially Select Campaign Recipients"}
                   </span>
                 </h3>
@@ -5534,7 +5534,7 @@ export function EmailCampaigns({
                   }}
                 >
                   {pickerTarget === "audience"
-                    ? "Handpick specific companies and contacts from EU Startups (SQLite) and LinkedIn Leads (MongoDB) to add directly into this audience."
+                    ? "Handpick specific companies and contacts from EU Startups and LinkedIn Leads (SQLite) to add directly into this audience."
                     : "Choose exactly which contacts from EU Startups and LinkedIn Leads should receive this campaign."}
                 </div>
               </div>
