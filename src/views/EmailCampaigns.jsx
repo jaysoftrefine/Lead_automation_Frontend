@@ -22,10 +22,6 @@ import {
   Search,
   CheckSquare,
   ArrowRight,
-  UserCheck,
-  Mail,
-  Plus,
-  Filter,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -85,40 +81,6 @@ export function EmailCampaigns({
   const [editingCampaignId, setEditingCampaignId] = useState(null);
   const [savingDraft, setSavingDraft] = useState(false);
 
-  // Generated Email Preview Modal
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [generatedEmails, setGeneratedEmails] = useState([]);
-  const [previewIndex, setPreviewIndex] = useState(0);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-
-  // Saved Audiences State
-  const [audiences, setAudiences] = useState([]);
-  const [loadingAudiences, setLoadingAudiences] = useState(false);
-  const [editingAudienceId, setEditingAudienceId] = useState(null);
-  const [audName, setAudName] = useState("");
-  const [audDescription, setAudDescription] = useState("");
-  const [audSources, setAudSources] = useState({ sqlite: true, mongo: false, manual: false });
-  const [audCountry, setAudCountry] = useState("");
-  const [audCategory, setAudCategory] = useState("");
-  const [audManualEmails, setAudManualEmails] = useState("");
-  const [audEstimatedCount, setAudEstimatedCount] = useState(null);
-  const [savingAudience, setSavingAudience] = useState(false);
-
-  // 1-by-1 Review Queue State
-  const [queueItems, setQueueItems] = useState([]);
-  const [loadingQueue, setLoadingQueue] = useState(false);
-  const [selectedQueueItem, setSelectedQueueItem] = useState(null);
-  const [queueFilter, setQueueFilter] = useState("all"); // 'all' | 'draft' | 'sent' | 'failed'
-  const [queueSearch, setQueueSearch] = useState("");
-  const [queueTemplateId, setQueueTemplateId] = useState("");
-  const [queueAudienceId, setQueueAudienceId] = useState("");
-  const [generatingQueue, setGeneratingQueue] = useState(false);
-  const [sendingSingleQueueId, setSendingSingleQueueId] = useState(null);
-  const [queueEditSubject, setQueueEditSubject] = useState("");
-  const [queueEditBody, setQueueEditBody] = useState("");
-  const [queuePreviewMode, setQueuePreviewMode] = useState("preview"); // 'preview' | 'edit'
-  const [savingQueueDraft, setSavingQueueDraft] = useState(false);
-
   // History & Logs Modal
   const [campaigns, setCampaigns] = useState([]);
   const [logsModalCampaign, setLogsModalCampaign] = useState(null);
@@ -153,21 +115,21 @@ export function EmailCampaigns({
       const res = await api.getTemplates();
       setTemplates(res.data || []);
       if (onUpdateBadge) onUpdateBadge((res.data || []).length);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const loadVariables = async () => {
     try {
       const res = await api.getEmailVariables();
       setVariables(res.data || []);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const loadCampaigns = async () => {
     try {
       const res = await api.getCampaigns();
       setCampaigns(res.data || []);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const loadSmtp = async () => {
@@ -181,58 +143,13 @@ export function EmailCampaigns({
       setSmtpFromName(cfg.from_name || "LeadPulse AI");
       setSmtpUseSSL(!!cfg.use_ssl);
       setSmtpUseTLS(!!cfg.use_tls);
-    } catch (e) {}
+    } catch (e) { }
   };
-
-  const loadAudiences = async () => {
-    setLoadingAudiences(true);
-    try {
-      const res = await api.getAudiences();
-      setAudiences(res.data || []);
-    } catch (e) {}
-    finally {
-      setLoadingAudiences(false);
-    }
-  };
-
-  const loadQueue = async (overrideStatus, overrideQ) => {
-    setLoadingQueue(true);
-    try {
-      const st = overrideStatus !== undefined ? overrideStatus : queueFilter;
-      const q = overrideQ !== undefined ? overrideQ : queueSearch;
-      const res = await api.getQueue({ status: st === "all" ? "" : st, q });
-      const items = res.data || [];
-      setQueueItems(items);
-      setSelectedQueueItem((prev) => {
-        if (prev) {
-          const found = items.find((i) => i.id === prev.id);
-          if (found) return found;
-        }
-        return items.length > 0 ? items[0] : null;
-      });
-    } catch (e) {}
-    finally {
-      setLoadingQueue(false);
-    }
-  };
-
-  // Sync selected queue item into editor
-  useEffect(() => {
-    if (selectedQueueItem) {
-      setQueueEditSubject(selectedQueueItem.subject || "");
-      setQueueEditBody(selectedQueueItem.raw_body || selectedQueueItem.body || "");
-    } else {
-      setQueueEditSubject("");
-      setQueueEditBody("");
-    }
-  }, [selectedQueueItem?.id]);
 
   useEffect(() => {
     loadTemplates();
     loadVariables();
     loadCampaigns();
-    loadAudiences();
-    loadQueue();
   }, []);
 
   // Insert variable into template body or subject
@@ -542,300 +459,6 @@ export function EmailCampaigns({
     }
   };
 
-  // Generate and Preview Campaign Emails
-  const handleGeneratePreview = async () => {
-    if (!campTemplateId) {
-      onToast("Please select an email template first", "error");
-      return;
-    }
-
-    const selectedSources = [];
-    if (campSources.sqlite) selectedSources.push("sqlite");
-    if (campSources.mongo) selectedSources.push("mongo");
-    if (campSources.manual && campManualEmails.trim())
-      selectedSources.push("manual");
-    if (selectedContacts.length > 0) selectedSources.push("selected");
-
-    const manualEmails = campManualEmails
-      ? campManualEmails
-          .split(/[\n,]/)
-          .map((e) => e.trim())
-          .filter((e) => e.length > 0)
-      : [];
-
-    setLoadingPreview(true);
-    setShowPreviewModal(true);
-    setPreviewIndex(0);
-
-    try {
-      const res = await api.previewGeneratedCampaign({
-        template_id: campTemplateId,
-        audience_sources: selectedSources.length > 0 ? selectedSources : ["sqlite"],
-        audience_filters: {
-          country: campCountry.trim(),
-          category: campCategory.trim(),
-        },
-        manual_emails: manualEmails,
-        selected_recipients: selectedContacts.map((c) => ({
-          person_name: c.name || "",
-          role: c.role || "",
-          email: c.email,
-          company_name: c.company || "",
-          website: c.website || "",
-          city: c.city || "",
-          country: c.country || "",
-          category: c.category || "",
-        })),
-        limit: 10,
-      });
-
-      setGeneratedEmails(res.data?.items || []);
-    } catch (e) {
-      onToast(e.message || "Failed to generate previews", "error");
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
-
-  // Send test of current previewed email
-  const handleSendCurrentPreviewTest = async () => {
-    const currentItem = generatedEmails[previewIndex] || generatedEmails[0];
-    if (!currentItem) return;
-    if (!testEmail || !testEmail.includes("@")) {
-      onToast("Enter a valid test email address in the field below", "error");
-      return;
-    }
-    setSendingTest(true);
-    try {
-      const res = await api.sendTestEmail({
-        to_email: testEmail.trim(),
-        subject: currentItem.rendered_subject,
-        body: currentItem.raw_body,
-        attachment_path: templates.find((t) => t.id === campTemplateId)?.attachment_path,
-        attachment_name: templates.find((t) => t.id === campTemplateId)?.attachment_name,
-      });
-      if (res.status === "success") {
-        onToast(res.message, "success");
-      } else {
-        onToast(res.message, "error");
-      }
-    } catch (e) {
-      onToast(e.message, "error");
-    } finally {
-      setSendingTest(false);
-    }
-  };
-
-  // ── Audience Handlers ───────────────────────
-  const handleSaveAudience = async () => {
-    if (!audName.trim()) {
-      onToast("Please enter an Audience Name", "error");
-      return;
-    }
-    const sources = [];
-    if (audSources.sqlite) sources.push("sqlite");
-    if (audSources.mongo) sources.push("mongo");
-    if (audSources.manual && audManualEmails.trim()) sources.push("manual");
-
-    if (sources.length === 0) {
-      onToast("Select at least one audience source", "error");
-      return;
-    }
-
-    const manualList = audManualEmails
-      ? audManualEmails
-          .split(/[\n,]/)
-          .map((e) => e.trim())
-          .filter((e) => e.length > 0)
-      : [];
-
-    setSavingAudience(true);
-    try {
-      const payload = {
-        name: audName.trim(),
-        description: audDescription.trim(),
-        sources,
-        filters: {
-          country: audCountry.trim(),
-          category: audCategory.trim(),
-        },
-        manual_recipients: manualList,
-      };
-
-      if (editingAudienceId) {
-        await api.updateAudience(editingAudienceId, payload);
-        onToast("Audience updated successfully!", "success");
-      } else {
-        await api.createAudience(payload);
-        onToast("Audience saved successfully!", "success");
-      }
-      handleResetAudienceForm();
-      loadAudiences();
-    } catch (e) {
-      onToast(e.message || "Failed to save audience", "error");
-    } finally {
-      setSavingAudience(false);
-    }
-  };
-
-  const handleEditAudience = (aud) => {
-    setEditingAudienceId(aud.id);
-    setAudName(aud.name || "");
-    setAudDescription(aud.description || "");
-    const srcs = aud.sources || [];
-    setAudSources({
-      sqlite: srcs.includes("sqlite"),
-      mongo: srcs.includes("mongo"),
-      manual: srcs.includes("manual"),
-    });
-    setAudCountry(aud.filters?.country || "");
-    setAudCategory(aud.filters?.category || "");
-    const manualArr = aud.manual_recipients || [];
-    setAudManualEmails(manualArr.map((m) => (typeof m === "string" ? m : m.email || "")).join("\n"));
-  };
-
-  const handleResetAudienceForm = () => {
-    setEditingAudienceId(null);
-    setAudName("");
-    setAudDescription("");
-    setAudSources({ sqlite: true, mongo: false, manual: false });
-    setAudCountry("");
-    setAudCategory("");
-    setAudManualEmails("");
-    setAudEstimatedCount(null);
-  };
-
-  const handleDeleteAudience = async (audId) => {
-    if (!window.confirm("Are you sure you want to delete this saved audience?")) return;
-    try {
-      await api.deleteAudience(audId);
-      onToast("Audience deleted", "info");
-      loadAudiences();
-    } catch (e) {
-      onToast(e.message, "error");
-    }
-  };
-
-  const handleAudienceSelectForReview = (aud) => {
-    setQueueAudienceId(aud.id);
-    setActivePanel("review_send");
-    loadQueue();
-  };
-
-  const handleAudienceSelectForBulk = (aud) => {
-    const srcs = aud.sources || [];
-    setCampSources({
-      sqlite: srcs.includes("sqlite"),
-      mongo: srcs.includes("mongo"),
-      manual: srcs.includes("manual"),
-    });
-    setCampCountry(aud.filters?.country || "");
-    setCampCategory(aud.filters?.category || "");
-    const manualArr = aud.manual_recipients || [];
-    setCampManualEmails(manualArr.map((m) => (typeof m === "string" ? m : m.email || "")).join("\n"));
-    setActivePanel("send");
-  };
-
-  // ── 1-by-1 Queue Handlers ──────────────────
-  const handleGenerateQueue = async () => {
-    if (!queueTemplateId) {
-      onToast("Please select an email template first", "error");
-      return;
-    }
-    setGeneratingQueue(true);
-    try {
-      const payload = {
-        template_id: queueTemplateId,
-        limit: 50,
-      };
-
-      if (queueAudienceId && queueAudienceId !== "custom") {
-        payload.audience_id = queueAudienceId;
-      } else {
-        const sources = [];
-        if (campSources.sqlite) sources.push("sqlite");
-        if (campSources.mongo) sources.push("mongo");
-        if (campSources.manual && campManualEmails.trim()) sources.push("manual");
-        payload.audience_sources = sources.length > 0 ? sources : ["sqlite"];
-        payload.audience_filters = { country: campCountry.trim(), category: campCategory.trim() };
-        payload.manual_emails = campManualEmails
-          ? campManualEmails.split(/[\n,]/).map((e) => e.trim()).filter((e) => e.length > 0)
-          : [];
-      }
-
-      const res = await api.generateQueue(payload);
-      onToast(res.message || "Queue generated successfully!", "success");
-      loadQueue();
-    } catch (e) {
-      onToast(e.message || "Failed to generate queue", "error");
-    } finally {
-      setGeneratingQueue(false);
-    }
-  };
-
-  const handleSaveQueueDraft = async () => {
-    if (!selectedQueueItem) return;
-    setSavingQueueDraft(true);
-    try {
-      await api.updateQueueItem(selectedQueueItem.id, {
-        subject: queueEditSubject,
-        body: queueEditBody,
-      });
-      onToast("Email draft updated!", "success");
-      loadQueue();
-    } catch (e) {
-      onToast(e.message, "error");
-    } finally {
-      setSavingQueueDraft(false);
-    }
-  };
-
-  const handleSendQueueItem = async (item) => {
-    if (!item) return;
-    setSendingSingleQueueId(item.id);
-    try {
-      if (queueEditSubject !== item.subject || queueEditBody !== (item.raw_body || item.body)) {
-        await api.updateQueueItem(item.id, {
-          subject: queueEditSubject,
-          body: queueEditBody,
-        });
-      }
-
-      const res = await api.sendQueueItem(item.id);
-      if (res.status === "success") {
-        onToast(res.message || `Sent to ${item.recipient_email}!`, "success");
-        loadQueue();
-      } else {
-        onToast(res.message, "error");
-      }
-    } catch (e) {
-      onToast(e.message, "error");
-    } finally {
-      setSendingSingleQueueId(null);
-    }
-  };
-
-  const handleDeleteQueueItem = async (itemId) => {
-    try {
-      await api.deleteQueueItem(itemId);
-      onToast("Item removed from queue", "info");
-      loadQueue();
-    } catch (e) {
-      onToast(e.message, "error");
-    }
-  };
-
-  const handleClearQueue = async (status = "all") => {
-    if (!window.confirm(`Are you sure you want to clear ${status === "sent" ? "sent" : "all"} queue items?`)) return;
-    try {
-      const res = await api.clearQueue(status);
-      onToast(res.message, "info");
-      loadQueue();
-    } catch (e) {
-      onToast(e.message, "error");
-    }
-  };
-
   // Save Campaign (Draft or Update)
   const handleSaveCampaignDraft = async () => {
     if (!campName.trim()) {
@@ -856,9 +479,9 @@ export function EmailCampaigns({
 
     const manualEmails = campManualEmails
       ? campManualEmails
-          .split(/[\n,]/)
-          .map((e) => e.trim())
-          .filter((e) => e.length > 0)
+        .split(/[\n,]/)
+        .map((e) => e.trim())
+        .filter((e) => e.length > 0)
       : [];
 
     setSavingDraft(true);
@@ -911,7 +534,7 @@ export function EmailCampaigns({
     let config = {};
     try {
       if (c.audience_filter) config = JSON.parse(c.audience_filter);
-    } catch (e) {}
+    } catch (e) { }
 
     const sources = config.audience_sources || ["sqlite"];
     setCampSources({
@@ -1012,9 +635,9 @@ export function EmailCampaigns({
 
     const manualEmails = campManualEmails
       ? campManualEmails
-          .split(/[\n,]/)
-          .map((e) => e.trim())
-          .filter((e) => e.length > 0)
+        .split(/[\n,]/)
+        .map((e) => e.trim())
+        .filter((e) => e.length > 0)
       : [];
 
     setLaunching(true);
@@ -1075,7 +698,7 @@ export function EmailCampaigns({
         if (c.status === "completed" || c.status === "failed") {
           loadCampaigns();
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     poll();
@@ -1150,67 +773,22 @@ export function EmailCampaigns({
           onClick={() => setActivePanel("templates")}
           className={`email-pill ${activePanel === "templates" ? "active" : ""}`}
         >
-          <FileText style={{ width: "15px", height: "15px" }} />
+          <FileText />
           <span>Templates</span>
         </button>
         <button
-          onClick={() => {
-            setActivePanel("audiences");
-            loadAudiences();
-          }}
-          className={`email-pill ${activePanel === "audiences" ? "active" : ""}`}
+          onClick={() => setActivePanel("create")}
+          className={`email-pill ${activePanel === "create" ? "active" : ""}`}
         >
-          <Users style={{ width: "15px", height: "15px" }} />
-          <span>Audiences</span>
-          {audiences.length > 0 && (
-            <span
-              style={{
-                fontSize: "0.68rem",
-                background: "rgba(255,255,255,0.14)",
-                padding: "1px 6px",
-                borderRadius: "10px",
-                marginLeft: "2px",
-              }}
-            >
-              {audiences.length}
-            </span>
-          )}
+          <Rocket />
+          <span>Create Campaign</span>
         </button>
         <button
-          onClick={() => {
-            setActivePanel("review_send");
-            loadQueue();
-            loadAudiences();
-          }}
-          className={`email-pill ${activePanel === "review_send" ? "active" : ""}`}
+          onClick={() => setActivePanel("send")}
+          className={`email-pill ${activePanel === "send" ? "active" : ""}`}
         >
-          <Edit3 style={{ width: "15px", height: "15px" }} />
-          <span>Review &amp; Send</span>
-          {queueItems.filter((i) => i.status === "draft").length > 0 && (
-            <span
-              style={{
-                fontSize: "0.68rem",
-                background: "var(--accent-cyan)",
-                color: "#050914",
-                fontWeight: 700,
-                padding: "1px 6px",
-                borderRadius: "10px",
-                marginLeft: "2px",
-              }}
-            >
-              {queueItems.filter((i) => i.status === "draft").length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => {
-            setActivePanel("create");
-            loadAudiences();
-          }}
-          className={`email-pill ${activePanel === "create" || activePanel === "send" ? "active" : ""}`}
-        >
-          <Rocket style={{ width: "15px", height: "15px" }} />
-          <span>Bulk Send</span>
+          <Send />
+          <span>Send Campaign</span>
         </button>
         <button
           onClick={() => {
@@ -1219,7 +797,7 @@ export function EmailCampaigns({
           }}
           className={`email-pill ${activePanel === "history" ? "active" : ""}`}
         >
-          <Clock style={{ width: "15px", height: "15px" }} />
+          <Clock />
           <span>Campaign History</span>
         </button>
         <button
@@ -1230,7 +808,7 @@ export function EmailCampaigns({
           className="email-pill"
           style={{ marginLeft: "auto" }}
         >
-          <Settings style={{ width: "15px", height: "15px" }} />
+          <Settings />
           <span>SMTP Config</span>
         </button>
       </div>
@@ -1569,1092 +1147,7 @@ export function EmailCampaigns({
         </div>
       )}
 
-      {/* PANEL: Target Audiences */}
-      {activePanel === "audiences" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.05fr 1fr",
-            gap: "1.25rem",
-          }}
-        >
-          {/* Create / Edit Audience Form */}
-          <div className="glass-card">
-            <div className="card-header">
-              <div className="card-title-group">
-                <Users
-                  style={{
-                    width: "18px",
-                    height: "18px",
-                    color: "var(--accent-cyan)",
-                  }}
-                />
-                <h2>
-                  {editingAudienceId
-                    ? "Edit Saved Audience"
-                    : "Create New Target Audience"}
-                </h2>
-              </div>
-              {editingAudienceId && (
-                <button
-                  type="button"
-                  onClick={handleResetAudienceForm}
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "0.78rem" }}
-                >
-                  ✕ Cancel Edit
-                </button>
-              )}
-            </div>
-
-            <div
-              style={{
-                marginTop: "1rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <div className="form-group">
-                <label>Audience Name *</label>
-                <input
-                  type="text"
-                  className="eu-input"
-                  placeholder="e.g. UK AI Founders, German Biotech Executives"
-                  value={audName}
-                  onChange={(e) => setAudName(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Description / Notes</label>
-                <input
-                  type="text"
-                  className="eu-input"
-                  placeholder="e.g. Seed and Series A startups extracted from EU Startups"
-                  value={audDescription}
-                  onChange={(e) => setAudDescription(e.target.value)}
-                />
-              </div>
-
-              {/* Audience Source Checkboxes */}
-              <div className="form-group">
-                <label>Data Sources</label>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    flexWrap: "wrap",
-                    marginTop: "4px",
-                  }}
-                >
-                  <label className="checkbox-chip">
-                    <input
-                      type="checkbox"
-                      checked={audSources.sqlite}
-                      onChange={(e) =>
-                        setAudSources((s) => ({
-                          ...s,
-                          sqlite: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="chip-content">EU Startups (SQLite DB)</span>
-                  </label>
-                  <label className="checkbox-chip">
-                    <input
-                      type="checkbox"
-                      checked={audSources.mongo}
-                      onChange={(e) =>
-                        setAudSources((s) => ({
-                          ...s,
-                          mongo: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="chip-content">LinkedIn Leads (MongoDB)</span>
-                  </label>
-                  <label className="checkbox-chip">
-                    <input
-                      type="checkbox"
-                      checked={audSources.manual}
-                      onChange={(e) =>
-                        setAudSources((s) => ({
-                          ...s,
-                          manual: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="chip-content">Manual / Direct Contacts</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Filters if SQLite or Mongo */}
-              {(audSources.sqlite || audSources.mongo) && (
-                <div className="form-row">
-                  <div className="form-group flex-1">
-                    <label>Filter by Country</label>
-                    <input
-                      type="text"
-                      className="eu-input"
-                      placeholder="e.g. United Kingdom, Germany"
-                      value={audCountry}
-                      onChange={(e) => setAudCountry(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group flex-1">
-                    <label>Filter by Category / Industry</label>
-                    <input
-                      type="text"
-                      className="eu-input"
-                      placeholder="e.g. Artificial Intelligence, SaaS"
-                      value={audCategory}
-                      onChange={(e) => setAudCategory(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Manual list if manual enabled */}
-              {audSources.manual && (
-                <div className="form-group">
-                  <label>Manual Contacts (Comma, pipe, or newline delimited)</label>
-                  <textarea
-                    className="eu-textarea"
-                    rows={4}
-                    placeholder="Name, Company, email@domain.com, Role, Website&#10;or simple emails: founder@company.com"
-                    value={audManualEmails}
-                    onChange={(e) => setAudManualEmails(e.target.value)}
-                    style={{ fontSize: "0.82rem", fontFamily: "monospace" }}
-                  />
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "10px",
-                  marginTop: "0.5rem",
-                }}
-              >
-                {editingAudienceId && (
-                  <button
-                    type="button"
-                    onClick={handleResetAudienceForm}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={savingAudience}
-                  onClick={handleSaveAudience}
-                  className="btn btn-primary"
-                  style={{ minWidth: "160px" }}
-                >
-                  <Save style={{ width: "15px", height: "15px" }} />
-                  <span>
-                    {savingAudience
-                      ? "Saving..."
-                      : editingAudienceId
-                        ? "Update Audience"
-                        : "Save Audience"}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Saved Audiences List */}
-          <div
-            className="glass-card"
-            style={{ display: "flex", flexDirection: "column" }}
-          >
-            <div className="card-header">
-              <div className="card-title-group">
-                <List
-                  style={{
-                    width: "18px",
-                    height: "18px",
-                    color: "var(--accent-cyan)",
-                  }}
-                />
-                <h2>Saved Audiences ({audiences.length})</h2>
-              </div>
-              <button
-                type="button"
-                onClick={loadAudiences}
-                className="btn btn-secondary btn-sm"
-              >
-                <RefreshCw style={{ width: "13px", height: "13px" }} />
-                <span>Refresh</span>
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: "1rem",
-                flex: 1,
-                overflowY: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
-            >
-              {loadingAudiences ? (
-                <div style={{ textAlign: "center", padding: "40px" }}>
-                  <div className="spinner" />
-                </div>
-              ) : audiences.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "50px 20px",
-                    color: "var(--text-muted)",
-                    border: "1px dashed var(--border-subtle)",
-                    borderRadius: "10px",
-                  }}
-                >
-                  <Users
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      margin: "0 auto 10px",
-                      opacity: 0.4,
-                    }}
-                  />
-                  <p>
-                    No saved audiences yet. Create an audience on the left to
-                    reuse across campaigns.
-                  </p>
-                </div>
-              ) : (
-                audiences.map((aud) => (
-                  <div
-                    key={aud.id}
-                    style={{
-                      background: "var(--bg-surface)",
-                      border: "1px solid var(--border-subtle)",
-                      borderRadius: "10px",
-                      padding: "14px 16px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <div>
-                        <h3
-                          style={{
-                            margin: 0,
-                            fontSize: "0.98rem",
-                            color: "var(--text-primary)",
-                          }}
-                        >
-                          {aud.name}
-                        </h3>
-                        {aud.description && (
-                          <p
-                            style={{
-                              margin: "3px 0 0",
-                              fontSize: "0.8rem",
-                              color: "var(--text-muted)",
-                            }}
-                          >
-                            {aud.description}
-                          </p>
-                        )}
-                      </div>
-                      <span
-                        style={{
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          padding: "3px 9px",
-                          borderRadius: "12px",
-                          background: "rgba(6,182,212,0.15)",
-                          color: "var(--accent-cyan)",
-                          border: "1px solid rgba(6,182,212,0.3)",
-                        }}
-                      >
-                        ~{aud.contact_count || 0} Contacts
-                      </span>
-                    </div>
-
-                    {/* Tags */}
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "6px",
-                        flexWrap: "wrap",
-                        fontSize: "0.72rem",
-                      }}
-                    >
-                      {(aud.sources || []).map((s) => (
-                        <span
-                          key={s}
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "2px 7px",
-                            borderRadius: "5px",
-                            color: "var(--text-secondary)",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          Source: {s}
-                        </span>
-                      ))}
-                      {aud.filters?.country && (
-                        <span
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "2px 7px",
-                            borderRadius: "5px",
-                            color: "var(--text-secondary)",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          Country: {aud.filters.country}
-                        </span>
-                      )}
-                      {aud.filters?.category && (
-                        <span
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "2px 7px",
-                            borderRadius: "5px",
-                            color: "var(--text-secondary)",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          Category: {aud.filters.category}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "8px",
-                        borderTop: "1px solid var(--border-subtle)",
-                        paddingTop: "8px",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleAudienceSelectForReview(aud)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: "0.76rem" }}
-                        title="Generate personalized emails and review"
-                      >
-                        <Edit3
-                          style={{
-                            width: "12px",
-                            height: "12px",
-                            color: "var(--accent-cyan)",
-                          }}
-                        />
-                        <span>Review &amp; Send</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAudienceSelectForBulk(aud)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: "0.76rem" }}
-                        title="Send bulk campaign to this audience"
-                      >
-                        <Rocket
-                          style={{
-                            width: "12px",
-                            height: "12px",
-                            color: "var(--accent-amber)",
-                          }}
-                        />
-                        <span>Bulk Send</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditAudience(aud)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: "0.76rem" }}
-                      >
-                        <Edit3 style={{ width: "12px", height: "12px" }} />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAudience(aud.id)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: "0.76rem", color: "#fb7185" }}
-                      >
-                        <Trash2 style={{ width: "12px", height: "12px" }} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PANEL: Review & Send */}
-      {activePanel === "review_send" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          {/* Top Control Bar: Select Template + Audience -> Generate Queue */}
-          <div className="glass-card" style={{ padding: "1.1rem 1.4rem" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  flexWrap: "wrap",
-                  flex: 1,
-                }}
-              >
-                {/* Template Select */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    minWidth: "220px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "0.76rem",
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    1. Select Email Template
-                  </label>
-                  <select
-                    className="eu-input"
-                    value={queueTemplateId}
-                    onChange={(e) => setQueueTemplateId(e.target.value)}
-                    style={{ padding: "7px 10px", fontSize: "0.85rem" }}
-                  >
-                    <option value="">-- Choose Template --</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Audience Select */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    minWidth: "220px",
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: "0.76rem",
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    2. Select Target Audience
-                  </label>
-                  <select
-                    className="eu-input"
-                    value={queueAudienceId}
-                    onChange={(e) => setQueueAudienceId(e.target.value)}
-                    style={{ padding: "7px 10px", fontSize: "0.85rem" }}
-                  >
-                    <option value="">-- Choose Audience --</option>
-                    {audiences.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} (~{a.contact_count} contacts)
-                      </option>
-                    ))}
-                    <option value="custom">Use Current Active Filters</option>
-                  </select>
-                </div>
-
-                {/* Generate Queue Button */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "flex-end",
-                    marginTop: "18px",
-                  }}
-                >
-                  <button
-                    type="button"
-                    disabled={generatingQueue || !queueTemplateId}
-                    onClick={handleGenerateQueue}
-                    className="btn btn-primary"
-                    style={{ padding: "8px 16px", fontWeight: 700 }}
-                    title="Generate personalized emails for this audience into review queue"
-                  >
-                    {generatingQueue ? (
-                      <>
-                        <div
-                          className="spinner"
-                          style={{ width: "14px", height: "14px" }}
-                        />
-                        <span>Generating Queue...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap style={{ width: "15px", height: "15px" }} />
-                        <span>Generate Outreach Queue</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Clear Queue Dropdown / Action */}
-              {queueItems.length > 0 && (
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <button
-                    type="button"
-                    onClick={() => handleClearQueue("sent")}
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: "0.76rem" }}
-                  >
-                    Clear Sent
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleClearQueue("all")}
-                    className="btn btn-secondary btn-sm"
-                    style={{ fontSize: "0.76rem", color: "#fb7185" }}
-                  >
-                    Clear All ({queueItems.length})
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Split Review Workspace */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "380px 1fr",
-              gap: "1.25rem",
-              minHeight: "560px",
-            }}
-          >
-            {/* LEFT COLUMN: Queue List */}
-            <div
-              className="glass-card"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                padding: "1rem",
-              }}
-            >
-              {/* Search & Status Filters */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                  marginBottom: "12px",
-                }}
-              >
-                <div style={{ position: "relative" }}>
-                  <Search
-                    style={{
-                      width: "14px",
-                      height: "14px",
-                      position: "absolute",
-                      left: "10px",
-                      top: "11px",
-                      color: "var(--text-muted)",
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className="eu-input"
-                    placeholder="Search recipient, company..."
-                    value={queueSearch}
-                    onChange={(e) => {
-                      setQueueSearch(e.target.value);
-                      loadQueue(queueFilter, e.target.value);
-                    }}
-                    style={{ paddingLeft: "32px", fontSize: "0.82rem" }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {["all", "draft", "sent"].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => {
-                        setQueueFilter(f);
-                        loadQueue(f, queueSearch);
-                      }}
-                      className={`btn btn-sm ${queueFilter === f ? "btn-primary" : "btn-secondary"}`}
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "4px 10px",
-                        flex: 1,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {f === "all"
-                        ? `All (${queueItems.length})`
-                        : f === "draft"
-                          ? `Ready (${queueItems.filter((i) => i.status === "draft").length})`
-                          : `Sent (${queueItems.filter((i) => i.status === "sent").length})`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Scrollable Queue Cards */}
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                {loadingQueue ? (
-                  <div style={{ textAlign: "center", padding: "30px" }}>
-                    <div className="spinner" />
-                  </div>
-                ) : queueItems.length === 0 ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "40px 16px",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    <Mail
-                      style={{
-                        width: "32px",
-                        height: "32px",
-                        margin: "0 auto 8px",
-                        opacity: 0.4,
-                      }}
-                    />
-                    <p style={{ fontSize: "0.85rem", margin: 0 }}>
-                      Queue is empty.
-                    </p>
-                    <span style={{ fontSize: "0.76rem" }}>
-                      Select a template &amp; audience above and click "Generate
-                      Outreach Queue".
-                    </span>
-                  </div>
-                ) : (
-                  queueItems.map((item) => {
-                    const isSelected = selectedQueueItem?.id === item.id;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => setSelectedQueueItem(item)}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "8px",
-                          cursor: "pointer",
-                          background: isSelected
-                            ? "rgba(6,182,212,0.12)"
-                            : "var(--bg-surface)",
-                          border: `1px solid ${isSelected ? "var(--accent-cyan)" : "var(--border-subtle)"}`,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "4px",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <strong
-                            style={{
-                              fontSize: "0.85rem",
-                              color: "var(--text-primary)",
-                            }}
-                          >
-                            {item.recipient_name || item.recipient_email}
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.68rem",
-                              padding: "2px 6px",
-                              borderRadius: "8px",
-                              fontWeight: 600,
-                              background:
-                                item.status === "sent"
-                                  ? "rgba(16,185,129,0.2)"
-                                  : item.status === "failed"
-                                    ? "rgba(244,63,94,0.2)"
-                                    : "rgba(245,158,11,0.2)",
-                              color:
-                                item.status === "sent"
-                                  ? "#10b981"
-                                  : item.status === "failed"
-                                    ? "#fb7185"
-                                    : "#f59e0b",
-                            }}
-                          >
-                            {item.status === "sent"
-                              ? "✓ Sent"
-                              : item.status === "failed"
-                                ? "⚠ Failed"
-                                : "Draft / Ready"}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "0.76rem",
-                            color: "var(--accent-cyan)",
-                          }}
-                        >
-                          {item.company_name || "(No company)"} &bull;{" "}
-                          <span style={{ color: "var(--text-muted)" }}>
-                            {item.recipient_email}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "0.74rem",
-                            color: "var(--text-dim)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {item.subject}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN: Active Email Review, Edit & 1-by-1 Send */}
-            <div
-              className="glass-card"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                padding: "1.2rem",
-              }}
-            >
-              {!selectedQueueItem ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  <Eye
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      marginBottom: "12px",
-                      opacity: 0.3,
-                    }}
-                  />
-                  <h3>No Email Selected</h3>
-                  <p
-                    style={{
-                      fontSize: "0.85rem",
-                      maxWidth: "340px",
-                      marginTop: "4px",
-                    }}
-                  >
-                    Select any generated contact email from the list on the left
-                    to review its content, edit sentences, and send.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                    flex: 1,
-                  }}
-                >
-                  {/* Recipient Profile Header */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      background: "var(--bg-surface)",
-                      padding: "10px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-subtle)",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      <span>
-                        👤{" "}
-                        <strong>
-                          {selectedQueueItem.recipient_name || "Recipient"}
-                        </strong>
-                      </span>
-                      <span style={{ color: "var(--accent-cyan)" }}>
-                        🏢{" "}
-                        <strong>
-                          {selectedQueueItem.company_name || "Company"}
-                        </strong>
-                      </span>
-                      <span>✉️ {selectedQueueItem.recipient_email}</span>
-                      {selectedQueueItem.role && (
-                        <span style={{ color: "var(--text-muted)" }}>
-                          💼 {selectedQueueItem.role}
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          padding: "3px 8px",
-                          borderRadius: "10px",
-                          fontWeight: 700,
-                          background:
-                            selectedQueueItem.status === "sent"
-                              ? "rgba(16,185,129,0.2)"
-                              : "rgba(245,158,11,0.2)",
-                          color:
-                            selectedQueueItem.status === "sent"
-                              ? "#10b981"
-                              : "#f59e0b",
-                        }}
-                      >
-                        {selectedQueueItem.status === "sent"
-                          ? `Sent on ${new Date(selectedQueueItem.sent_at).toLocaleTimeString()}`
-                          : "Ready to Send"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteQueueItem(selectedQueueItem.id)
-                        }
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: "4px 8px", color: "#fb7185" }}
-                        title="Remove from queue"
-                      >
-                        <Trash2 style={{ width: "13px", height: "13px" }} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Editable Subject Field */}
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: "0.78rem" }}>Subject Line</label>
-                    <input
-                      type="text"
-                      className="eu-input"
-                      value={queueEditSubject}
-                      onChange={(e) => setQueueEditSubject(e.target.value)}
-                      style={{ fontWeight: 600 }}
-                    />
-                  </div>
-
-                  {/* Tab Toggle: Live Preview vs Edit Body */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginTop: "2px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: "0.78rem",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Email Content
-                    </label>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <button
-                        type="button"
-                        onClick={() => setQueuePreviewMode("preview")}
-                        className={`btn btn-sm ${queuePreviewMode === "preview" ? "btn-primary" : "btn-secondary"}`}
-                        style={{ fontSize: "0.74rem", padding: "3px 10px" }}
-                      >
-                        <Eye style={{ width: "12px", height: "12px" }} />
-                        <span>Live Preview</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQueuePreviewMode("edit")}
-                        className={`btn btn-sm ${queuePreviewMode === "edit" ? "btn-primary" : "btn-secondary"}`}
-                        style={{ fontSize: "0.74rem", padding: "3px 10px" }}
-                      >
-                        <Edit3 style={{ width: "12px", height: "12px" }} />
-                        <span>Edit Content</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Content Container */}
-                  <div style={{ flex: 1, minHeight: "260px" }}>
-                    {queuePreviewMode === "preview" ? (
-                      <div
-                        style={{
-                          background: "#ffffff",
-                          color: "#222222",
-                          padding: "18px 22px",
-                          borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
-                          height: "100%",
-                          maxHeight: "360px",
-                          overflowY: "auto",
-                          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html: selectedQueueItem.body,
-                        }}
-                      />
-                    ) : (
-                      <textarea
-                        className="eu-textarea"
-                        rows={12}
-                        value={queueEditBody}
-                        onChange={(e) => setQueueEditBody(e.target.value)}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          minHeight: "260px",
-                          fontFamily: "monospace",
-                          fontSize: "0.84rem",
-                          lineHeight: 1.5,
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Action Bar: Save Draft & Send 1-by-1 */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingTop: "10px",
-                      borderTop: "1px solid var(--border-subtle)",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={savingQueueDraft}
-                      onClick={handleSaveQueueDraft}
-                      className="btn btn-secondary"
-                    >
-                      <Save style={{ width: "14px", height: "14px" }} />
-                      <span>
-                        {savingQueueDraft ? "Saving..." : "Save Draft Changes"}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        sendingSingleQueueId === selectedQueueItem.id
-                      }
-                      onClick={() => handleSendQueueItem(selectedQueueItem)}
-                      className="btn btn-primary btn-large"
-                      style={{
-                        minWidth: "220px",
-                        fontWeight: 700,
-                        boxShadow: "0 0 16px rgba(99, 102, 241, 0.4)",
-                      }}
-                    >
-                      {sendingSingleQueueId === selectedQueueItem.id ? (
-                        <>
-                          <div
-                            className="spinner"
-                            style={{ width: "14px", height: "14px" }}
-                          />
-                          <span>
-                            Sending to {selectedQueueItem.recipient_email}...
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Send style={{ width: "16px", height: "16px" }} />
-                          <span>
-                            Send Email to{" "}
-                            {selectedQueueItem.recipient_name ||
-                              selectedQueueItem.company_name ||
-                              "Contact"}
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PANEL: Bulk Send Campaign (Configuration & Launch) */}
+      {/* PANEL 2: Create Campaign */}
       {activePanel === "create" && (
         <div
           style={{
@@ -2762,71 +1255,6 @@ export function EmailCampaigns({
                   ))}
                 </select>
               </div>
-
-              {/* Quick Load Saved Audience */}
-              {audiences.length > 0 && (
-                <div
-                  className="form-group"
-                  style={{
-                    background: "rgba(6,182,212,0.06)",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(6,182,212,0.2)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <label
-                      style={{
-                        margin: 0,
-                        color: "var(--accent-cyan)",
-                        fontSize: "0.8rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      ⚡ Quick Load Saved Audience
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setActivePanel("audiences")}
-                      className="btn-icon-ghost"
-                      style={{
-                        fontSize: "0.72rem",
-                        color: "var(--accent-cyan)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Manage Audiences →
-                    </button>
-                  </div>
-                  <select
-                    className="eu-input"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const aud = audiences.find(
-                        (a) => a.id === e.target.value,
-                      );
-                      if (aud) handleAudienceSelectForBulk(aud);
-                    }}
-                    style={{ fontSize: "0.82rem" }}
-                  >
-                    <option value="">
-                      — Select a saved audience to auto-populate —
-                    </option>
-                    {audiences.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} (~{a.contact_count} contacts)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* Audience Sources */}
               <div className="form-group">
@@ -3126,22 +1554,11 @@ export function EmailCampaigns({
                   disabled={savingDraft}
                   onClick={handleSaveCampaignDraft}
                   className="btn btn-secondary btn-large"
-                  style={{ flex: 1, minWidth: "150px" }}
+                  style={{ flex: 1, minWidth: "160px" }}
                   title="Save campaign settings without sending"
                 >
                   <Save style={{ width: "15px", height: "15px" }} />
                   <span>{savingDraft ? "Saving..." : editingCampaignId ? "Update Campaign" : "Save as Draft"}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={loadingPreview}
-                  onClick={handleGeneratePreview}
-                  className="btn btn-secondary btn-large"
-                  style={{ flex: 1, minWidth: "180px" }}
-                  title="Generate and preview exact emails for target audience"
-                >
-                  <Eye style={{ width: "15px", height: "15px", color: "var(--accent-cyan)" }} />
-                  <span>{loadingPreview ? "Generating..." : "Preview Generated Emails"}</span>
                 </button>
                 <button
                   type="button"
@@ -3157,7 +1574,7 @@ export function EmailCampaigns({
                     setActivePanel("send");
                   }}
                   className="btn btn-primary btn-large"
-                  style={{ flex: 1.2, minWidth: "180px" }}
+                  style={{ flex: 1.2, minWidth: "200px" }}
                 >
                   <span>Proceed to Send</span>
                   <ArrowRight style={{ width: "16px", height: "16px" }} />
@@ -3198,17 +1615,6 @@ export function EmailCampaigns({
                 />
                 <h2>Campaign Preview &amp; Readiness</h2>
               </div>
-              <button
-                type="button"
-                disabled={loadingPreview}
-                onClick={handleGeneratePreview}
-                className="btn btn-secondary btn-sm"
-                style={{ fontSize: "0.76rem" }}
-                title="Preview real emails generated for audience"
-              >
-                <Eye style={{ width: "12px", height: "12px", color: "var(--accent-cyan)" }} />
-                <span>Preview Real Emails</span>
-              </button>
             </div>
 
             <div
@@ -3288,9 +1694,9 @@ export function EmailCampaigns({
                     borderRadius: "var(--radius-sm)",
                     background:
                       campSources.sqlite ||
-                      campSources.mongo ||
-                      campSources.manual ||
-                      selectedContacts.length > 0
+                        campSources.mongo ||
+                        campSources.manual ||
+                        selectedContacts.length > 0
                         ? "rgba(16,185,129,0.1)"
                         : "rgba(255,255,255,0.04)",
                     border: `1px solid ${campSources.sqlite || campSources.mongo || campSources.manual || selectedContacts.length > 0 ? "rgba(16,185,129,0.3)" : "var(--border-subtle)"}`,
@@ -3307,9 +1713,9 @@ export function EmailCampaigns({
                       fontWeight: 600,
                       color:
                         campSources.sqlite ||
-                        campSources.mongo ||
-                        campSources.manual ||
-                        selectedContacts.length > 0
+                          campSources.mongo ||
+                          campSources.manual ||
+                          selectedContacts.length > 0
                           ? "#10b981"
                           : "var(--text-dim)",
                       marginTop: "2px",
@@ -3318,8 +1724,8 @@ export function EmailCampaigns({
                     {selectedContacts.length > 0
                       ? `✓ ${selectedContacts.length} Contacts`
                       : campSources.sqlite ||
-                          campSources.mongo ||
-                          campSources.manual
+                        campSources.mongo ||
+                        campSources.manual
                         ? "✓ Sources Set"
                         : "⚠ Unselected"}
                   </div>
@@ -3392,30 +1798,30 @@ export function EmailCampaigns({
 
                   {templates.find((t) => t.id === campTemplateId)
                     ?.attachment_name && (
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "4px 10px",
-                        borderRadius: "var(--radius-full)",
-                        background: "rgba(139,92,246,0.12)",
-                        border: "1px solid rgba(139,92,246,0.3)",
-                        fontSize: "0.75rem",
-                        color: "var(--accent-violet)",
-                        width: "fit-content",
-                      }}
-                    >
-                      <Paperclip style={{ width: "12px", height: "12px" }} />
-                      <span>
-                        Attachment:{" "}
-                        {
-                          templates.find((t) => t.id === campTemplateId)
-                            ?.attachment_name
-                        }
-                      </span>
-                    </div>
-                  )}
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "4px 10px",
+                          borderRadius: "var(--radius-full)",
+                          background: "rgba(139,92,246,0.12)",
+                          border: "1px solid rgba(139,92,246,0.3)",
+                          fontSize: "0.75rem",
+                          color: "var(--accent-violet)",
+                          width: "fit-content",
+                        }}
+                      >
+                        <Paperclip style={{ width: "12px", height: "12px" }} />
+                        <span>
+                          Attachment:{" "}
+                          {
+                            templates.find((t) => t.id === campTemplateId)
+                              ?.attachment_name
+                          }
+                        </span>
+                      </div>
+                    )}
 
                   <div style={{ flex: 1 }}>
                     <span
@@ -3646,26 +2052,16 @@ export function EmailCampaigns({
               </div>
 
               {/* Launch & Save Buttons */}
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "10px" }}>
                 <button
                   type="button"
                   disabled={savingDraft}
                   onClick={handleSaveCampaignDraft}
                   className="btn btn-secondary btn-large"
-                  style={{ flex: 0.6, minWidth: "140px" }}
+                  style={{ flex: 0.6 }}
                 >
                   <Save style={{ width: "16px", height: "16px" }} />
                   <span>{savingDraft ? "Saving..." : editingCampaignId ? "Update Draft" : "Save Draft"}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={loadingPreview}
-                  onClick={handleGeneratePreview}
-                  className="btn btn-secondary btn-large"
-                  style={{ flex: 0.8, minWidth: "170px" }}
-                >
-                  <Eye style={{ width: "16px", height: "16px", color: "var(--accent-cyan)" }} />
-                  <span>{loadingPreview ? "Generating..." : "Preview Emails"}</span>
                 </button>
                 <button
                   type="button"
@@ -3674,7 +2070,6 @@ export function EmailCampaigns({
                   className="btn btn-primary btn-large"
                   style={{
                     flex: 1.4,
-                    minWidth: "220px",
                     padding: "0.9rem 1.5rem",
                     fontSize: "0.95rem",
                     fontWeight: 700,
@@ -3823,7 +2218,7 @@ export function EmailCampaigns({
                               (((campaignProgress.sent || 0) +
                                 (campaignProgress.failed_count || 0)) /
                                 Math.max(campaignProgress.total || 1, 1)) *
-                                100,
+                              100,
                             ),
                           )}%`,
                         }}
@@ -3929,15 +2324,14 @@ export function EmailCampaigns({
                       </td>
                       <td>
                         <span
-                          className={`camp-stat-pill ${
-                            c.status === "completed"
+                          className={`camp-stat-pill ${c.status === "completed"
                               ? "success"
                               : c.status === "running"
                                 ? "info"
                                 : c.status === "failed"
                                   ? "error"
                                   : ""
-                          }`}
+                            }`}
                           style={{
                             fontSize: "0.72rem",
                             textTransform: "capitalize",
@@ -4530,447 +2924,6 @@ export function EmailCampaigns({
                     Apply Selection (
                     {Object.values(pickerSelection).filter(Boolean).length})
                   </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Generated Emails Live Preview Modal */}
-      {showPreviewModal && (
-        <div className="modal-backdrop" onClick={() => setShowPreviewModal(false)}>
-          <div
-            className="modal-dialog glass-card"
-            style={{
-              maxWidth: "880px",
-              width: "95%",
-              maxHeight: "92vh",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="modal-header"
-              style={{
-                paddingBottom: "12px",
-                borderBottom: "1px solid var(--border-subtle)",
-              }}
-            >
-              <div className="modal-title-group">
-                <Eye
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    color: "var(--accent-cyan)",
-                  }}
-                />
-                <div>
-                  <h2 style={{ fontSize: "1.15rem", margin: 0 }}>
-                    Generated Outreach Email Preview
-                  </h2>
-                  <div
-                    style={{
-                      fontSize: "0.78rem",
-                      color: "var(--text-muted)",
-                      marginTop: "2px",
-                    }}
-                  >
-                    Showing exactly what will be sent to your audience with
-                    personalized AI variables &amp; company data
-                  </div>
-                </div>
-              </div>
-              <button
-                className="btn-close"
-                onClick={() => setShowPreviewModal(false)}
-              >
-                &times;
-              </button>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "16px 0",
-                display: "flex",
-                flexDirection: "column",
-                gap: "14px",
-              }}
-            >
-              {loadingPreview ? (
-                <div style={{ textAlign: "center", padding: "60px 20px" }}>
-                  <div
-                    className="spinner"
-                    style={{
-                      margin: "0 auto 16px",
-                      width: "30px",
-                      height: "30px",
-                    }}
-                  />
-                  <p
-                    style={{
-                      color: "var(--text-secondary)",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    Generating personalized emails with AI &amp; template
-                    variables...
-                  </p>
-                </div>
-              ) : generatedEmails.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "50px 20px",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  <p>
-                    No recipients available for preview. Please select an
-                    audience or enter manual contacts.
-                  </p>
-                </div>
-              ) : (
-                (() => {
-                  const currentItem =
-                    generatedEmails[previewIndex] || generatedEmails[0];
-                  const rec = currentItem?.recipient || {};
-
-                  return (
-                    <>
-                      {/* Recipient Navigator Bar */}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          background: "var(--bg-surface)",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "10px",
-                          padding: "10px 14px",
-                          flexWrap: "wrap",
-                          gap: "10px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: "0.84rem",
-                              fontWeight: 700,
-                              color: "var(--text-primary)",
-                            }}
-                          >
-                            Recipient {previewIndex + 1} of{" "}
-                            {generatedEmails.length}
-                          </span>
-                          {rec.is_sample && (
-                            <span
-                              style={{
-                                fontSize: "0.7rem",
-                                background: "rgba(245, 158, 11, 0.15)",
-                                color: "#f59e0b",
-                                padding: "2px 8px",
-                                borderRadius: "12px",
-                                border: "1px solid rgba(245, 158, 11, 0.3)",
-                              }}
-                            >
-                              Sample Fallback Preview
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Prev / Next buttons */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <button
-                            type="button"
-                            disabled={previewIndex === 0}
-                            onClick={() =>
-                              setPreviewIndex((i) => Math.max(0, i - 1))
-                            }
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "4px 10px", fontSize: "0.8rem" }}
-                          >
-                            ◀ Previous
-                          </button>
-                          <button
-                            type="button"
-                            disabled={
-                              previewIndex >= generatedEmails.length - 1
-                            }
-                            onClick={() =>
-                              setPreviewIndex((i) =>
-                                Math.min(generatedEmails.length - 1, i + 1),
-                              )
-                            }
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "4px 10px", fontSize: "0.8rem" }}
-                          >
-                            Next ▶
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Recipient Information Metadata Chips */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          flexWrap: "wrap",
-                          fontSize: "0.78rem",
-                        }}
-                      >
-                        <div
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          <strong style={{ color: "var(--text-muted)" }}>
-                            Name:
-                          </strong>{" "}
-                          <span style={{ color: "var(--text-primary)" }}>
-                            {rec.person_name || "(None)"}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          <strong style={{ color: "var(--text-muted)" }}>
-                            Company:
-                          </strong>{" "}
-                          <span
-                            style={{
-                              color: "var(--accent-cyan)",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {rec.company_name || "(None)"}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            background: "var(--chip-bg)",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          <strong style={{ color: "var(--text-muted)" }}>
-                            Email:
-                          </strong>{" "}
-                          <span style={{ color: "var(--text-primary)" }}>
-                            {rec.email || "(None)"}
-                          </span>
-                        </div>
-                        {rec.role && (
-                          <div
-                            style={{
-                              background: "var(--chip-bg)",
-                              padding: "4px 10px",
-                              borderRadius: "6px",
-                              border: "1px solid var(--border-subtle)",
-                            }}
-                          >
-                            <strong style={{ color: "var(--text-muted)" }}>
-                              Role:
-                            </strong>{" "}
-                            <span style={{ color: "var(--text-primary)" }}>
-                              {rec.role}
-                            </span>
-                          </div>
-                        )}
-                        {rec.website && (
-                          <div
-                            style={{
-                              background: "var(--chip-bg)",
-                              padding: "4px 10px",
-                              borderRadius: "6px",
-                              border: "1px solid var(--border-subtle)",
-                            }}
-                          >
-                            <strong style={{ color: "var(--text-muted)" }}>
-                              Website:
-                            </strong>{" "}
-                            <span style={{ color: "#0066cc" }}>
-                              {rec.website}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Email Mockup Client Box */}
-                      <div
-                        style={{
-                          background: "#ffffff",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "10px",
-                          overflow: "hidden",
-                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.12)",
-                        }}
-                      >
-                        {/* Email Header */}
-                        <div
-                          style={{
-                            background: "#f8fafc",
-                            borderBottom: "1px solid #e2e8f0",
-                            padding: "12px 18px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "6px",
-                            fontSize: "0.84rem",
-                            color: "#334155",
-                          }}
-                        >
-                          <div>
-                            <strong
-                              style={{
-                                color: "#64748b",
-                                display: "inline-block",
-                                width: "70px",
-                              }}
-                            >
-                              Subject:
-                            </strong>
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: "#0f172a",
-                                fontSize: "0.95rem",
-                              }}
-                            >
-                              {currentItem.rendered_subject}
-                            </span>
-                          </div>
-                          <div>
-                            <strong
-                              style={{
-                                color: "#64748b",
-                                display: "inline-block",
-                                width: "70px",
-                              }}
-                            >
-                              From:
-                            </strong>
-                            <span>
-                              {smtpFromName || "Stephan Arnas"} &lt;
-                              {smtpUser || "outreach@softrefine.com"}&gt;
-                            </span>
-                          </div>
-                          <div>
-                            <strong
-                              style={{
-                                color: "#64748b",
-                                display: "inline-block",
-                                width: "70px",
-                              }}
-                            >
-                              To:
-                            </strong>
-                            <span>
-                              {rec.person_name
-                                ? `${rec.person_name} <${rec.email}>`
-                                : rec.email}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Rendered HTML Email Body */}
-                        <div
-                          style={{
-                            padding: "24px 28px",
-                            background: "#ffffff",
-                            minHeight: "280px",
-                            maxHeight: "460px",
-                            overflowY: "auto",
-                            color: "#222222",
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: currentItem.rendered_body,
-                          }}
-                        />
-                      </div>
-                    </>
-                  );
-                })()
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingTop: "12px",
-                borderTop: "1px solid var(--border-subtle)",
-                flexWrap: "wrap",
-                gap: "10px",
-              }}
-            >
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <input
-                  type="email"
-                  className="eu-input"
-                  style={{
-                    width: "220px",
-                    fontSize: "0.8rem",
-                    padding: "6px 10px",
-                  }}
-                  placeholder="Send test to your email"
-                  value={testEmail}
-                  onChange={(e) => setTestEmail(e.target.value)}
-                />
-                <button
-                  type="button"
-                  disabled={sendingTest}
-                  onClick={handleSendCurrentPreviewTest}
-                  className="btn btn-secondary btn-sm"
-                >
-                  <Send style={{ width: "12px", height: "12px" }} />
-                  <span>{sendingTest ? "Sending..." : "Send Test to Me"}</span>
-                </button>
-              </div>
-
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowPreviewModal(false)}
-                >
-                  Close Preview
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    setShowPreviewModal(false);
-                    setActivePanel("send");
-                  }}
-                >
-                  <span>Proceed to Launch</span>
-                  <ArrowRight style={{ width: "13px", height: "13px" }} />
                 </button>
               </div>
             </div>
