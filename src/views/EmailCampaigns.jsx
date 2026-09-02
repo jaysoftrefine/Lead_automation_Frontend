@@ -2461,7 +2461,7 @@ export function EmailCampaigns({
                         }
                       />
                       <span className="chip-content" style={{ fontWeight: 500 }}>
-                        EU Startups (SQLite DB)
+                        EU Startups
                       </span>
                     </label>
 
@@ -2485,7 +2485,7 @@ export function EmailCampaigns({
                         }
                       />
                       <span className="chip-content" style={{ fontWeight: 500 }}>
-                        LinkedIn Leads (SQLite)
+                        LinkedIn Leads
                       </span>
                     </label>
 
@@ -2827,7 +2827,7 @@ export function EmailCampaigns({
                           <td colSpan={6} style={{ textAlign: "center", padding: "50px 20px" }}>
                             <div className="spinner" style={{ margin: "0 auto 12px" }} />
                             <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                              Loading leads from SQLite...
+                              Loading leads...
                             </span>
                           </td>
                         </tr>
@@ -5534,7 +5534,7 @@ export function EmailCampaigns({
                   }}
                 >
                   {pickerTarget === "audience"
-                    ? "Handpick specific companies and contacts from EU Startups and LinkedIn Leads (SQLite) to add directly into this audience."
+                    ? "Handpick specific companies and contacts from EU Startups and LinkedIn Leads to add directly into this audience."
                     : "Choose exactly which contacts from EU Startups and LinkedIn Leads should receive this campaign."}
                 </div>
               </div>

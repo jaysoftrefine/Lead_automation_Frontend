@@ -32,7 +32,7 @@ export const api = {
   getPipelineStatus: () => fetchJson("/api/pipeline/status"),
   stopPipeline: () => fetchJson("/api/pipeline/stop", { method: "POST" }),
 
-  // Leads (SQLite)
+  // Leads
   getLeads: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/leads${q ? `?${q}` : ""}`);
