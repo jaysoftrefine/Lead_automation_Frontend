@@ -20,6 +20,9 @@ export async function fetchJson<T = any>(url: string, options: RequestInit = {})
 // ─────────────────────────────────────────────
 
 export const api = {
+  // Health & System
+  checkHealth: () => fetchJson<{ status: string; database: any }>("/api/health"),
+
   // Stats
   getStats: () => fetchJson("/api/stats"),
 
