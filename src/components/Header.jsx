@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Zap, Settings, Clock, Sun, Moon } from "lucide-react";
+import { Zap, Clock, Sun, Moon } from "lucide-react";
 
-export function Header({ stats, onOpenSmtp, isPipelineRunning, theme, onToggleTheme }) {
+export function Header({ stats, isPipelineRunning, theme, onToggleTheme }) {
   const [timeStr, setTimeStr] = useState("");
   const [dateStr, setDateStr] = useState("");
 
@@ -117,16 +117,6 @@ export function Header({ stats, onOpenSmtp, isPipelineRunning, theme, onToggleTh
             <span className="theme-toggle-label">
               {isLight ? "Light Mode" : "Dark Mode"}
             </span>
-          </button>
-
-          {/* SMTP Settings Quick Button */}
-          <button
-            onClick={onOpenSmtp}
-            className="btn btn-secondary btn-sm"
-            title="Configure SMTP Server"
-          >
-            <Settings style={{ width: "13px", height: "13px" }} />
-            <span>SMTP Config</span>
           </button>
         </div>
       </div>

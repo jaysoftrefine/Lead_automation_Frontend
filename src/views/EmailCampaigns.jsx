@@ -4279,73 +4279,124 @@ export function EmailCampaigns({
 
               {/* Action Buttons */}
               <div
-                style={{ display: "flex", gap: "10px", marginTop: "1.25rem", flexWrap: "wrap" }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  marginTop: "1.25rem",
+                }}
               >
-                <button
-                  type="button"
-                  disabled={savingDraft}
-                  onClick={handleSaveCampaignDraft}
-                  className="btn btn-secondary btn-large"
-                  style={{ flex: 1, minWidth: "150px" }}
-                  title="Save campaign settings without sending"
-                >
-                  <Save style={{ width: "15px", height: "15px" }} />
-                  <span>{savingDraft ? "Saving..." : editingCampaignId ? "Update Campaign" : "Save as Draft"}</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={loadingPreview}
-                  onClick={handleGeneratePreview}
-                  className="btn btn-secondary btn-large"
+                <div
                   style={{
-                    flex: 1,
-                    minWidth: "180px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    borderColor: "rgba(6, 182, 212, 0.35)",
-                    background: "rgba(6, 182, 212, 0.05)",
-                    color: "var(--text-primary)",
-                    fontWeight: 600,
-                    transition: "all 0.15s ease",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1.3fr 1.15fr",
+                    gap: "10px",
                   }}
                 >
-                  <Eye style={{ width: "16px", height: "16px", color: "var(--accent-cyan)" }} />
-                  <span>{loadingPreview ? "Generating..." : "Preview Generated Emails"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!campName.trim()) {
-                      onToast("Please enter a Campaign Name", "error");
-                      return;
-                    }
-                    if (!campTemplateId) {
-                      onToast("Please select an email template", "error");
-                      return;
-                    }
-                    setActivePanel("send");
-                  }}
-                  className="btn btn-primary btn-large"
-                  style={{ flex: 1.2, minWidth: "180px" }}
-                >
-                  <span>Proceed to Send</span>
-                  <ArrowRight style={{ width: "16px", height: "16px" }} />
-                </button>
+                  <button
+                    type="button"
+                    disabled={savingDraft}
+                    onClick={handleSaveCampaignDraft}
+                    className="btn btn-secondary"
+                    style={{
+                      height: "44px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "7px",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <Save style={{ width: "15px", height: "15px" }} />
+                    <span>
+                      {savingDraft
+                        ? "Saving..."
+                        : editingCampaignId
+                          ? "Update"
+                          : "Save Draft"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={loadingPreview}
+                    onClick={handleGeneratePreview}
+                    className="btn btn-preview-email"
+                    style={{
+                      height: "44px",
+                      fontSize: "0.85rem",
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <Eye style={{ width: "16px", height: "16px" }} />
+                    <span>
+                      {loadingPreview
+                        ? "Generating..."
+                        : "Preview Generated Emails"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!campName.trim()) {
+                        onToast("Please enter a Campaign Name", "error");
+                        return;
+                      }
+                      if (!campTemplateId) {
+                        onToast("Please select an email template", "error");
+                        return;
+                      }
+                      setActivePanel("send");
+                    }}
+                    className="btn btn-primary"
+                    style={{
+                      height: "44px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "7px",
+                      fontSize: "0.86rem",
+                      fontWeight: 700,
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <span>Proceed to Send</span>
+                    <ArrowRight style={{ width: "15px", height: "15px" }} />
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   disabled={launching}
                   onClick={handleLaunchCampaign}
-                  className="btn btn-secondary btn-large"
-                  title="Directly launch without previewing"
+                  className="btn btn-secondary"
+                  style={{
+                    height: "42px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    fontSize: "0.86rem",
+                    fontWeight: 600,
+                    borderRadius: "10px",
+                    border: "1px dashed var(--border-subtle)",
+                  }}
                 >
                   {launching ? (
                     <div className="spinner" />
                   ) : (
                     <>
-                      <Rocket style={{ width: "15px", height: "15px" }} />
-                      <span>⚡ Quick Launch</span>
+                      <Rocket
+                        style={{
+                          width: "15px",
+                          height: "15px",
+                          color: "#f59e0b",
+                        }}
+                      />
+                      <span>⚡ Quick Launch Campaign</span>
                     </>
                   )}
                 </button>
