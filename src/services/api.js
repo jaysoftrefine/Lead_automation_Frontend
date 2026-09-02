@@ -128,6 +128,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateCampaign: (id, payload) =>
+    fetchJson(`/api/email/campaigns/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  launchCampaignById: (id) =>
+    fetchJson(`/api/email/campaigns/${id}/launch`, {
+      method: "POST",
+    }),
+  deleteCampaign: (id) =>
+    fetchJson(`/api/email/campaigns/${id}`, {
+      method: "DELETE",
+    }),
+  previewGeneratedCampaign: (payload) =>
+    fetchJson("/api/email/campaigns/preview-generated", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   estimateRecipients: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/campaigns/estimate${q ? `?${q}` : ""}`);
@@ -137,4 +155,51 @@ export const api = {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/campaigns/${id}/logs${q ? `?${q}` : ""}`);
   },
+
+  // Audiences (Recipient Lists)
+  getAudiences: () => fetchJson("/api/email/audiences"),
+  createAudience: (payload) =>
+    fetchJson("/api/email/audiences", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getAudience: (id) => fetchJson(`/api/email/audiences/${id}`),
+  updateAudience: (id, payload) =>
+    fetchJson(`/api/email/audiences/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteAudience: (id) =>
+    fetchJson(`/api/email/audiences/${id}`, {
+      method: "DELETE",
+    }),
+
+  // 1-by-1 Review Queue
+  generateQueue: (payload) =>
+    fetchJson("/api/email/queue/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getQueue: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return fetchJson(`/api/email/queue${q ? `?${q}` : ""}`);
+  },
+  getQueueItem: (id) => fetchJson(`/api/email/queue/${id}`),
+  updateQueueItem: (id, payload) =>
+    fetchJson(`/api/email/queue/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  sendQueueItem: (id) =>
+    fetchJson(`/api/email/queue/${id}/send`, {
+      method: "POST",
+    }),
+  deleteQueueItem: (id) =>
+    fetchJson(`/api/email/queue/${id}`, {
+      method: "DELETE",
+    }),
+  clearQueue: (status = "all") =>
+    fetchJson(`/api/email/queue/clear?status=${encodeURIComponent(status)}`, {
+      method: "POST",
+    }),
 };
