@@ -190,6 +190,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  regenerateQueueItemAI: (id) =>
+    fetchJson(`/api/email/queue/${id}/regenerate-ai`, {
+      method: "POST",
+    }),
   sendQueueItem: (id) =>
     fetchJson(`/api/email/queue/${id}/send`, {
       method: "POST",

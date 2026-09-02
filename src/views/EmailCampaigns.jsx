@@ -26,6 +26,7 @@ import {
   Mail,
   Plus,
   Filter,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -117,6 +118,7 @@ export function EmailCampaigns({
   const [queueEditSubject, setQueueEditSubject] = useState("");
   const [queueEditBody, setQueueEditBody] = useState("");
   const [queuePreviewMode, setQueuePreviewMode] = useState("preview"); // 'preview' | 'edit'
+  const [regeneratingAI, setRegeneratingAI] = useState(false);
   const [savingQueueDraft, setSavingQueueDraft] = useState(false);
 
   // History & Logs Modal
@@ -822,6 +824,26 @@ export function EmailCampaigns({
       loadQueue();
     } catch (e) {
       onToast(e.message, "error");
+    }
+  };
+
+  const handleRegenerateAI = async () => {
+    if (!selectedQueueItem?.id) return;
+    setRegeneratingAI(true);
+    try {
+      const res = await api.regenerateQueueItemAI(selectedQueueItem.id);
+      const updated = res.data;
+      setSelectedQueueItem(updated);
+      setQueueEditSubject(updated.subject);
+      setQueueEditBody(updated.raw_body || updated.body);
+      setQueueItems((prev) =>
+        prev.map((i) => (i.id === updated.id ? updated : i))
+      );
+      onToast(res.message || "Generated new AI hook & pitch!", "success");
+    } catch (e) {
+      onToast(e.message, "error");
+    } finally {
+      setRegeneratingAI(false);
     }
   };
 
@@ -2548,6 +2570,35 @@ export function EmailCampaigns({
                       >
                         <Edit3 style={{ width: "12px", height: "12px" }} />
                         <span>Edit Content</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={regeneratingAI}
+                        onClick={handleRegenerateAI}
+                        className="btn btn-sm btn-secondary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "3px 10px",
+                          color: "var(--accent-cyan)",
+                          borderColor: "rgba(6,182,212,0.3)",
+                          background: "rgba(6,182,212,0.08)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                        title="Regenerate company hook and value pitch using Gemini AI"
+                      >
+                        {regeneratingAI ? (
+                          <>
+                            <div className="spinner" style={{ width: "11px", height: "11px" }} />
+                            <span>AI Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles style={{ width: "12px", height: "12px", color: "var(--accent-cyan)" }} />
+                            <span>✨ Regenerate with AI</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
