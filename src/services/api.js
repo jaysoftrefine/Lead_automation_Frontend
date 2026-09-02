@@ -91,16 +91,27 @@ export const api = {
   uploadAttachment: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/api/email/attachments/upload`, {
-      method: "POST",
-      body: formData,
-    });
+    let res;
+    try {
+      res = await fetch("/api/email/attachments/upload", {
+        method: "POST",
+        body: formData,
+      });
+    } catch (err) {
+      const url = API_BASE ? `${API_BASE}/api/email/attachments/upload` : "/api/email/attachments/upload";
+      res = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.detail || data.message || "Failed to upload attachment.");
     }
     return data;
   },
+
+  getAttachments: () => fetchJson("/api/email/attachments"),
 
   sendTestEmail: (payload) =>
     fetchJson("/api/email/send-test", {
@@ -173,6 +184,10 @@ export const api = {
     fetchJson(`/api/email/audiences/${id}`, {
       method: "DELETE",
     }),
+  browseRecipients: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return fetchJson(`/api/email/recipients/browse${q ? `?${q}` : ""}`);
+  },
 
   // 1-by-1 Review Queue
   generateQueue: (payload) =>
