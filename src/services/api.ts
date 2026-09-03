@@ -40,6 +40,11 @@ export const api = {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/leads${q ? `?${q}` : ""}`);
   },
+  createManualLead: (payload: any) =>
+    fetchJson("/api/leads/manual", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   // Instant Agent Lab
   runAgentResearch: (payload: any) =>
@@ -55,6 +60,11 @@ export const api = {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/eu-startups/startups${q ? `?${q}` : ""}`);
   },
+  createManualStartup: (payload: any) =>
+    fetchJson("/api/eu-startups/manual", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   discoverEUStartups: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/eu-startups/discover${q ? `?${q}` : ""}`, {

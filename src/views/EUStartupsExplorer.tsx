@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Building2,
   Sparkles,
@@ -14,6 +15,8 @@ import {
   Filter,
   CheckCircle,
   Users,
+  Plus,
+  UserPlus,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -40,6 +43,80 @@ export function EUStartupsExplorer({ onToast }) {
   const [sort, setSort] = useState("updated_at|desc");
   const [perPage, setPerPage] = useState(25);
 
+  // Manual Entry Modal
+  const [selectedStartup, setSelectedStartup] = useState(null);
+  const [showAddStartupModal, setShowAddStartupModal] = useState(false);
+  const [submittingStartup, setSubmittingStartup] = useState(false);
+  const [startupForm, setStartupForm] = useState({
+    company_name: "",
+    website: "",
+    country: "Germany",
+    city: "Berlin",
+    category: "AI & Automation",
+    founded_year: "2023",
+    description: "",
+    tags: "",
+    person_name: "",
+    person_role: "Founder & CEO",
+    person_email: "",
+    person_linkedin: "",
+  });
+
+  const handleCreateManualStartup = async (e) => {
+    e.preventDefault();
+    if (!startupForm.company_name.trim()) {
+      onToast("Company Name is required", "error");
+      return;
+    }
+    setSubmittingStartup(true);
+    try {
+      const people = [];
+      if (startupForm.person_name.trim() || startupForm.person_email.trim()) {
+        people.push({
+          name: startupForm.person_name.trim(),
+          role: startupForm.person_role.trim() || "Founder",
+          email: startupForm.person_email.trim(),
+          linkedin: startupForm.person_linkedin.trim(),
+        });
+      }
+
+      await api.createManualStartup({
+        company_name: startupForm.company_name.trim(),
+        website: startupForm.website.trim(),
+        country: startupForm.country.trim(),
+        city: startupForm.city.trim(),
+        category: startupForm.category.trim(),
+        founded_year: startupForm.founded_year ? parseInt(startupForm.founded_year) : null,
+        description: startupForm.description.trim(),
+        tags: startupForm.tags.trim(),
+        people,
+      });
+
+      onToast(`Startup '${startupForm.company_name}' successfully added to database!`, "success");
+      setShowAddStartupModal(false);
+      setStartupForm({
+        company_name: "",
+        website: "",
+        country: "Germany",
+        city: "Berlin",
+        category: "AI & Automation",
+        founded_year: "2023",
+        description: "",
+        tags: "",
+        person_name: "",
+        person_role: "Founder & CEO",
+        person_email: "",
+        person_linkedin: "",
+      });
+      loadStats();
+      loadStartups(1);
+    } catch (err) {
+      onToast(err.message || "Failed to create manual startup", "error");
+    } finally {
+      setSubmittingStartup(false);
+    }
+  };
+
   // Discovery Modal
   const [showDiscoverModal, setShowDiscoverModal] = useState(false);
   const [discoverTopic, setDiscoverTopic] = useState("AI & Automation");
@@ -61,6 +138,18 @@ export function EUStartupsExplorer({ onToast }) {
     "CleanTech & Energy",
     "Robotics & Hardware",
   ];
+
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    if (selectedStartup || showAddStartupModal || showDiscoverModal) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedStartup, showAddStartupModal, showDiscoverModal]);
 
   const loadStats = async () => {
     try {
@@ -261,14 +350,25 @@ export function EUStartupsExplorer({ onToast }) {
             <h2>EU Startups Directory &amp; Lead Explorer</h2>
           </div>
 
-          <button
-            onClick={() => setShowDiscoverModal(true)}
-            className="btn btn-primary"
-            style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
-          >
-            <Sparkles style={{ width: "14px", height: "14px" }} />
-            <span>Discover &amp; Enrich More Leads</span>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <button
+              onClick={() => setShowAddStartupModal(true)}
+              className="btn btn-secondary"
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <Plus style={{ width: "14px", height: "14px" }} />
+              <span>Add Startup</span>
+            </button>
+
+            <button
+              onClick={() => setShowDiscoverModal(true)}
+              className="btn btn-primary"
+              style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
+            >
+              <Sparkles style={{ width: "14px", height: "14px" }} />
+              <span>Discover &amp; Enrich More Leads</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Toolbar */}
@@ -664,137 +764,642 @@ export function EUStartupsExplorer({ onToast }) {
         )}
       </div>
 
-      {/* Discovery Modal */}
-      {showDiscoverModal && (
-        <div className="modal-backdrop" onClick={() => !discovering && setShowDiscoverModal(false)}>
-          <div className="modal-dialog glass-card" style={{ maxWidth: "680px" }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title-group">
-                <span className="platform-badge accent">
-                  <Sparkles style={{ width: "12px", height: "12px" }} /> AI Lead Discovery
-                </span>
-                <h2>Discover &amp; Enrich High-Growth EU Startups</h2>
-              </div>
-              <button className="btn-close" disabled={discovering} onClick={() => setShowDiscoverModal(false)}>
-                &times;
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
-                Automatically search European tech ecosystems, probe official company websites, reason with Gemini LLM, extract human founders and deliver verified direct emails.
-              </p>
-
-              {/* Quick Topic Chips */}
-              <div>
-                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "6px", display: "block" }}>
-                  Select Industry Topics (Click to combine)
-                </label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {topicOptions.map((topic) => {
-                    const isActive = activeTopics.includes(topic);
-                    return (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => toggleTopic(topic)}
-                        className={`var-chip ${isActive ? "active" : ""}`}
-                        style={
-                          isActive
-                            ? { background: "rgba(6,182,212,0.3)", color: "#fff", borderColor: "var(--accent-cyan)" }
-                            : {}
-                        }
-                      >
-                        {topic}
-                      </button>
-                    );
-                  })}
+      {/* Startup Details Modal (Rendered to body via createPortal) */}
+      {selectedStartup &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.7)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => setSelectedStartup(null)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "680px",
+                maxHeight: "88vh",
+                overflowY: "auto",
+                borderRadius: "16px",
+                padding: "1.5rem",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "1rem", marginBottom: "1rem" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span className="platform-badge accent" style={{ fontSize: "0.72rem" }}>EU Startup Profile</span>
+                    {selectedStartup.category && (
+                      <span className="platform-badge" style={{ fontSize: "0.72rem" }}>
+                        {selectedStartup.category}
+                      </span>
+                    )}
+                    {selectedStartup.founded_year && (
+                      <span className="platform-badge" style={{ fontSize: "0.72rem" }}>
+                        Founded {selectedStartup.founded_year}
+                      </span>
+                    )}
+                  </div>
+                  <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                    {selectedStartup.company_name}
+                  </h2>
                 </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group flex-2">
-                  <label>Search Keywords / Niche</label>
-                  <input
-                    type="text"
-                    className="eu-input"
-                    value={discoverTopic}
-                    onChange={(e) => setDiscoverTopic(e.target.value)}
-                    placeholder="e.g. B2B automation, AI agents..."
-                  />
-                </div>
-
-                <div className="form-group flex-1">
-                  <label>Target Country</label>
-                  <select value={discoverCountry} onChange={(e) => setDiscoverCountry(e.target.value)}>
-                    <option value="">All Europe</option>
-                    <option value="Germany">Germany</option>
-                    <option value="United Kingdom">United Kingdom</option>
-                    <option value="France">France</option>
-                    <option value="Netherlands">Netherlands</option>
-                    <option value="Spain">Spain</option>
-                    <option value="Italy">Italy</option>
-                    <option value="Sweden">Sweden</option>
-                    <option value="Switzerland">Switzerland</option>
-                    <option value="Ireland">Ireland</option>
-                  </select>
-                </div>
-
-                <div className="form-group flex-1">
-                  <label>Batch Size</label>
-                  <select value={discoverLimit} onChange={(e) => setDiscoverLimit(parseInt(e.target.value, 10))}>
-                    <option value={3}>3 Qualified Leads</option>
-                    <option value={5}>5 Qualified Leads</option>
-                    <option value={10}>10 Qualified Leads</option>
-                  </select>
-                </div>
-              </div>
-
-              {discovering && (
-                <div
+                <button
+                  className="btn-close"
+                  onClick={() => setSelectedStartup(null)}
                   style={{
-                    padding: "16px",
-                    background: "rgba(6,182,212,0.08)",
-                    border: "1px solid rgba(6,182,212,0.25)",
-                    borderRadius: "8px",
-                    textAlign: "center",
+                    fontSize: "1.4rem",
+                    cursor: "pointer",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    padding: "4px 8px",
                   }}
                 >
-                  <div className="spinner" style={{ margin: "0 auto 10px" }} />
-                  <div style={{ color: "var(--accent-cyan)", fontWeight: 700, fontSize: "0.88rem" }}>
-                    Discovering European Startups &amp; Enriching Contacts...
+                  &times;
+                </button>
+              </div>
+
+              {/* Quick Info Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                  gap: "0.75rem",
+                  padding: "0.85rem",
+                  background: "var(--chip-bg)",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border-subtle)",
+                  fontSize: "0.82rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div>
+                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>LOCATION</span>
+                  <strong>{[selectedStartup.city, selectedStartup.country].filter(Boolean).join(", ") || "Europe"}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>WEBSITE</span>
+                  {selectedStartup.website ? (
+                    <a
+                      href={selectedStartup.website.startsWith("http") ? selectedStartup.website : `https://${selectedStartup.website}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}
+                    >
+                      <Globe style={{ width: "12px", height: "12px" }} />
+                      {selectedStartup.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </a>
+                  ) : (
+                    "N/A"
+                  )}
+                </div>
+                {selectedStartup.company_linkedin && (
+                  <div>
+                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>LINKEDIN</span>
+                    <a
+                      href={selectedStartup.company_linkedin}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent-indigo)", fontSize: "0.8rem" }}
+                    >
+                      Company Profile →
+                    </a>
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                    Scraping directory &amp; websites, executing founder extraction and deliverability verification.
+                )}
+              </div>
+
+              {/* People Section */}
+              <div style={{ marginBottom: "1.2rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
+                  <h4 style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--accent-emerald)", margin: 0 }}>
+                    Founders &amp; Key Leadership ({selectedStartup.people?.length || 0})
+                  </h4>
+                  <button
+                    onClick={() => {
+                      handleEnrichSingle(selectedStartup.id, selectedStartup.company_name);
+                      setSelectedStartup(null);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: "0.72rem", padding: "3px 8px" }}
+                  >
+                    <Sparkles style={{ width: "11px", height: "11px", color: "var(--accent-cyan)" }} /> Auto-Enrich More
+                  </button>
+                </div>
+
+                {selectedStartup.people && selectedStartup.people.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {selectedStartup.people.map((p, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          padding: "10px 12px",
+                          background: "rgba(255, 255, 255, 0.03)",
+                          border: "1px solid var(--border-subtle)",
+                          borderRadius: "10px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text-primary)" }}>
+                            {p.name || "Executive"}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            {p.role || "Leadership"}
+                          </div>
+                          {p.email && (
+                            <div
+                              style={{
+                                color: "var(--accent-emerald)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "0.8rem",
+                                marginTop: "3px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                              }}
+                            >
+                              <span>✉</span>
+                              <span>{p.email}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {p.linkedin && (
+                          <a
+                            href={p.linkedin}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none" }}
+                          >
+                            LinkedIn →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontStyle: "italic", padding: "8px 0" }}>
+                    No people recorded yet. Click "Auto-Enrich More" to discover founders using AI.
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {selectedStartup.description && (
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <h4 style={{ fontSize: "0.88rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--text-primary)" }}>
+                    About Company
+                  </h4>
+                  <div
+                    style={{
+                      background: "var(--chip-bg)",
+                      border: "1px solid var(--border-subtle)",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      fontSize: "0.82rem",
+                      lineHeight: "1.5",
+                      color: "var(--text-secondary)",
+                      maxHeight: "180px",
+                      overflowY: "auto",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {selectedStartup.description}
                   </div>
                 </div>
               )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
-                <button
-                  type="button"
-                  disabled={discovering}
-                  onClick={() => setShowDiscoverModal(false)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={discovering}
-                  onClick={handleRunDiscover}
-                  className="btn btn-primary btn-sm"
-                  style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
-                >
-                  <Sparkles style={{ width: "14px", height: "14px" }} />
-                  <span>{discovering ? "Discovering..." : "Start Lead Discovery"}</span>
+              {/* Tags */}
+              {selectedStartup.tags && (
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <h4 style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--text-muted)" }}>
+                    Industry Tags
+                  </h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {selectedStartup.tags.split(",").map((t, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          background: "rgba(16, 185, 129, 0.1)",
+                          color: "#10b981",
+                          border: "1px solid rgba(16, 185, 129, 0.25)",
+                        }}
+                      >
+                        {t.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border-subtle)", paddingTop: "0.85rem", marginTop: "0.5rem" }}>
+                <button onClick={() => setSelectedStartup(null)} className="btn btn-secondary btn-sm" style={{ padding: "6px 16px" }}>
+                  Close
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
+      {/* Discovery Modal (Rendered to body via createPortal) */}
+      {showDiscoverModal &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.7)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => !discovering && setShowDiscoverModal(false)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "680px",
+                maxHeight: "88vh",
+                overflowY: "auto",
+                borderRadius: "16px",
+                padding: "1.5rem",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <div className="modal-title-group">
+                  <span className="platform-badge accent">
+                    <Sparkles style={{ width: "12px", height: "12px" }} /> AI Lead Discovery
+                  </span>
+                  <h2>Discover &amp; Enrich High-Growth EU Startups</h2>
+                </div>
+                <button className="btn-close" disabled={discovering} onClick={() => setShowDiscoverModal(false)}>
+                  &times;
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <p style={{ fontSize: "0.84rem", color: "var(--text-muted)" }}>
+                  Automatically search European tech ecosystems, probe official company websites, reason with Gemini LLM, extract human founders and deliver verified direct emails.
+                </p>
+
+                {/* Quick Topic Chips */}
+                <div>
+                  <label style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "block", marginBottom: "0.4rem" }}>
+                    Select Focus Market / Vertical:
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {topicOptions.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDiscoverTopic(t)}
+                        style={{
+                          background: discoverTopic === t ? "var(--accent-cyan)" : "var(--chip-bg)",
+                          color: discoverTopic === t ? "#000" : "var(--text-secondary)",
+                          border: "1px solid var(--border-subtle)",
+                          padding: "4px 10px",
+                          borderRadius: "14px",
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                          fontWeight: discoverTopic === t ? 600 : 400,
+                        }}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Custom Topic / Search Keywords</label>
+                  <input
+                    type="text"
+                    className="eu-input"
+                    placeholder="e.g. B2B SaaS, Climate Tech, Quantum Computing..."
+                    value={discoverTopic}
+                    onChange={(e) => setDiscoverTopic(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div className="form-group">
+                    <label>Target Country (Optional)</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="e.g. Germany, France, United Kingdom..."
+                      value={discoverCountry}
+                      onChange={(e) => setDiscoverCountry(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Number of Startups to Discover</label>
+                    <select
+                      className="eu-input"
+                      value={discoverLimit}
+                      onChange={(e) => setDiscoverLimit(Number(e.target.value))}
+                    >
+                      <option value={3}>3 Startups (Fast)</option>
+                      <option value={5}>5 Startups (Recommended)</option>
+                      <option value={10}>10 Startups</option>
+                      <option value={15}>15 Startups (Deep Scan)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {discovering && (
+                  <div
+                    style={{
+                      background: "var(--chip-bg)",
+                      border: "1px solid var(--border-subtle)",
+                      padding: "1rem",
+                      borderRadius: "10px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--accent-cyan)", fontWeight: 600, fontSize: "0.9rem" }}>
+                      <div className="spinner" style={{ width: "16px", height: "16px" }} />
+                      <span>Research Agent Operating...</span>
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                      Scraping directory &amp; websites, executing founder extraction and deliverability verification.
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    disabled={discovering}
+                    onClick={() => setShowDiscoverModal(false)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={discovering}
+                    onClick={handleRunDiscover}
+                    className="btn btn-primary btn-sm"
+                    style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
+                  >
+                    <Sparkles style={{ width: "14px", height: "14px" }} />
+                    <span>{discovering ? "Discovering..." : "Start Lead Discovery"}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Manual Startup Entry Modal (Rendered to body via createPortal) */}
+      {showAddStartupModal &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.7)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => !submittingStartup && setShowAddStartupModal(false)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "640px",
+                maxHeight: "88vh",
+                overflowY: "auto",
+                borderRadius: "16px",
+                padding: "1.5rem",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <div className="modal-title-group">
+                  <span className="platform-badge accent">
+                    <Building2 style={{ width: "12px", height: "12px" }} /> Manual Entry
+                  </span>
+                  <h2>Add European Startup to Database</h2>
+                </div>
+                <button className="btn-close" disabled={submittingStartup} onClick={() => setShowAddStartupModal(false)}>
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateManualStartup} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div className="form-group">
+                    <label>Company Name *</label>
+                    <input
+                      type="text"
+                      required
+                      className="eu-input"
+                      placeholder="e.g. Mistral AI"
+                      value={startupForm.company_name}
+                      onChange={(e) => setStartupForm({ ...startupForm, company_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Website URL</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="https://example.com"
+                      value={startupForm.website}
+                      onChange={(e) => setStartupForm({ ...startupForm, website: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.8rem" }}>
+                  <div className="form-group">
+                    <label>Country</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="e.g. Germany"
+                      value={startupForm.country}
+                      onChange={(e) => setStartupForm({ ...startupForm, country: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="e.g. Berlin"
+                      value={startupForm.city}
+                      onChange={(e) => setStartupForm({ ...startupForm, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Founded Year</label>
+                    <input
+                      type="number"
+                      className="eu-input"
+                      placeholder="2023"
+                      value={startupForm.founded_year}
+                      onChange={(e) => setStartupForm({ ...startupForm, founded_year: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  <div className="form-group">
+                    <label>Industry / Category</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="e.g. AI & Automation"
+                      value={startupForm.category}
+                      onChange={(e) => setStartupForm({ ...startupForm, category: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      className="eu-input"
+                      placeholder="e.g. saas, llm, b2b"
+                      value={startupForm.tags}
+                      onChange={(e) => setStartupForm({ ...startupForm, tags: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Company Description</label>
+                  <textarea
+                    className="eu-input"
+                    rows={2}
+                    placeholder="Brief summary of the startup's product and mission..."
+                    value={startupForm.description}
+                    onChange={(e) => setStartupForm({ ...startupForm, description: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.8rem" }}>
+                  <h4 style={{ fontSize: "0.88rem", marginBottom: "0.6rem", color: "var(--accent-emerald)" }}>
+                    Key Executive / Founder Info
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
+                    <div className="form-group">
+                      <label>Founder Name</label>
+                      <input
+                        type="text"
+                        className="eu-input"
+                        placeholder="e.g. Arthur Mensch"
+                        value={startupForm.person_name}
+                        onChange={(e) => setStartupForm({ ...startupForm, person_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Role</label>
+                      <input
+                        type="text"
+                        className="eu-input"
+                        placeholder="e.g. CEO & Co-Founder"
+                        value={startupForm.person_role}
+                        onChange={(e) => setStartupForm({ ...startupForm, person_role: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem", marginTop: "0.6rem" }}>
+                    <div className="form-group">
+                      <label>Verified Email</label>
+                      <input
+                        type="email"
+                        className="eu-input"
+                        placeholder="e.g. arthur@company.eu"
+                        value={startupForm.person_email}
+                        onChange={(e) => setStartupForm({ ...startupForm, person_email: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>LinkedIn Profile URL</label>
+                      <input
+                        type="text"
+                        className="eu-input"
+                        placeholder="https://linkedin.com/in/..."
+                        value={startupForm.person_linkedin}
+                        onChange={(e) => setStartupForm({ ...startupForm, person_linkedin: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    disabled={submittingStartup}
+                    onClick={() => setShowAddStartupModal(false)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingStartup}
+                    className="btn btn-primary btn-sm"
+                    style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
+                  >
+                    {submittingStartup ? "Saving..." : "Save Startup to DB"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
