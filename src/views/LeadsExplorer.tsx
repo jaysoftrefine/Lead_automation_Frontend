@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Database, Search, Download, Globe, Eye, RefreshCw, Plus, UserPlus } from "lucide-react";
+import { Database, Search, Download, Globe, Eye, RefreshCw, Plus, UserPlus, ExternalLink, Calendar, Clock } from "lucide-react";
 import { api } from "../services/api";
+
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return String(dateStr);
+  }
+}
 
 export interface LeadsExplorerProps {
   onToast: (message: string, type?: string) => void;
@@ -18,6 +29,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const [manualForm, setManualForm] = useState({
     company: "",
     title: "",
+    job_url: "",
     company_domain: "",
     location: "Remote",
     company_size: "Small (1-50)",
@@ -39,7 +51,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     setSubmittingLead(true);
     try {
       const contacts: any[] = [];
-      if (manualForm.contact_name.trim() || manualForm.contact_email.trim()) {
+      if (manualForm.contact_name.trim() || manualForm.contact_email.trim() || manualForm.contact_linkedin.trim()) {
         contacts.push({
           name: manualForm.contact_name.trim(),
           role: manualForm.contact_role.trim() || "Decision Maker",
@@ -51,6 +63,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       await (api as any).createManualLead({
         company: manualForm.company.trim(),
         title: manualForm.title.trim(),
+        job_url: manualForm.job_url.trim() || undefined,
         company_domain: manualForm.company_domain.trim(),
         location: manualForm.location.trim() || "Remote",
         company_size: manualForm.company_size,
@@ -67,6 +80,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       setManualForm({
         company: "",
         title: "",
+        job_url: "",
         company_domain: "",
         location: "Remote",
         company_size: "Small (1-50)",
@@ -140,14 +154,17 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       a.click();
     } else {
       // CSV
-      const headers = ["Company", "Location", "Website", "Size", "Contacts", "Confidence"];
+      const headers = ["Company", "Location", "Website", "LinkedIn / Job URL", "Size", "Date Posted", "Date Scraped", "Contacts", "Contact LinkedIn URLs"];
       const rows = filteredLeads.map((l) => [
         `"${(l.company || "").replace(/"/g, '""')}"`,
         `"${(l.location || "").replace(/"/g, '""')}"`,
         `"${l.company_domain || ""}"`,
+        `"${l.job_url || ""}"`,
         `"${l.company_size || ""}"`,
+        `"${formatDate(l.date_posted)}"`,
+        `"${formatDate(l.scraped_at || l.created_at)}"`,
         `"${(l.contacts || []).map((c: any) => `${c.name || ""} (${c.role || ""}): ${c.email || ""}`).join("; ").replace(/"/g, '""')}"`,
-        `"${l.confidence || ""}"`,
+        `"${(l.contacts || []).map((c: any) => c.linkedin_url || c.linkedin || "").filter(Boolean).join("; ").replace(/"/g, '""')}"`,
       ]);
       const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
       const blob = new Blob([csvContent], { type: "text/csv" });
@@ -236,9 +253,9 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
             <tr>
               <th>Company &amp; Domain</th>
               <th>Location</th>
+              <th>Date Posted &amp; Scraped</th>
               <th>Key Decision Makers &amp; Contacts</th>
               <th>Size</th>
-              <th>Confidence</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -265,28 +282,66 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                     <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
                       {lead.company || "Unnamed Company"}
                     </div>
-                    {lead.company_domain && (
-                      <a
-                        href={`https://${lead.company_domain}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "var(--accent-cyan)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "3px",
-                          textDecoration: "none",
-                          marginTop: "2px",
-                        }}
-                      >
-                        <Globe style={{ width: "11px", height: "11px" }} />
-                        <span>{lead.company_domain}</span>
-                      </a>
-                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "3px" }}>
+                      {lead.company_domain && (
+                        <a
+                          href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--accent-cyan)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            textDecoration: "none",
+                          }}
+                        >
+                          <Globe style={{ width: "11px", height: "11px" }} />
+                          <span>{lead.company_domain}</span>
+                        </a>
+                      )}
+                      {lead.job_url && (
+                        <a
+                          href={lead.job_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#0a66c2",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            textDecoration: "none",
+                            fontWeight: 600,
+                          }}
+                          title="Open LinkedIn Job Posting"
+                        >
+                          <ExternalLink style={{ width: "11px", height: "11px" }} />
+                          <span>LinkedIn Job</span>
+                        </a>
+                      )}
+                    </div>
                   </td>
 
                   <td style={{ color: "var(--text-secondary)" }}>{lead.location || "—"}</td>
+
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: "0.78rem", color: lead.date_posted ? "var(--text-primary)" : "var(--text-dim)", display: "flex", alignItems: "center", gap: "5px", marginBottom: "4px" }}>
+                      <Calendar style={{ width: "12px", height: "12px", color: lead.date_posted ? "var(--accent-cyan)" : "var(--text-muted)", flexShrink: 0 }} />
+                      <span>
+                        <strong style={{ color: "var(--text-muted)", fontWeight: 500 }}>Posted:</strong>{" "}
+                        {formatDate(lead.date_posted)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "5px" }}>
+                      <Clock style={{ width: "12px", height: "12px", color: "var(--accent-emerald)", flexShrink: 0 }} />
+                      <span>
+                        <strong style={{ color: "var(--text-muted)", fontWeight: 500 }}>Scraped:</strong>{" "}
+                        {formatDate(lead.scraped_at || lead.created_at)}
+                      </span>
+                    </div>
+                  </td>
 
                   <td>
                     {(lead.contacts || []).length === 0 ? (
@@ -304,8 +359,35 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                             fontSize: "0.8rem",
                           }}
                         >
-                          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{c.name || "Executive"}</span>
-                          {c.role && <span style={{ color: "var(--text-muted)", marginLeft: "4px" }}>({c.role})</span>}
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+                            <div>
+                              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{c.name || "Executive"}</span>
+                              {c.role && <span style={{ color: "var(--text-muted)", marginLeft: "4px" }}>({c.role})</span>}
+                            </div>
+                            {(c.linkedin_url || c.linkedin) && (
+                              <a
+                                href={c.linkedin_url || c.linkedin}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  fontSize: "0.72rem",
+                                  color: "#0a66c2",
+                                  textDecoration: "none",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "2px",
+                                  fontWeight: 600,
+                                  background: "rgba(10, 102, 194, 0.1)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  flexShrink: 0,
+                                }}
+                                title="Open Contact's LinkedIn Profile"
+                              >
+                                <span>LinkedIn ↗</span>
+                              </a>
+                            )}
+                          </div>
                           {c.email && (
                             <div style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                               ✉ {c.email}
@@ -319,24 +401,6 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                   <td>
                     <span className="platform-badge" style={{ fontSize: "0.7rem", textTransform: "capitalize" }}>
                       {lead.company_size || "Standard"}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        color:
-                          lead.confidence === "high"
-                            ? "#10b981"
-                            : lead.confidence === "medium"
-                            ? "#f59e0b"
-                            : "var(--text-muted)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {lead.confidence || "Medium"}
                     </span>
                   </td>
 
@@ -401,18 +465,6 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                         {selectedLead.company_size}
                       </span>
                     )}
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        padding: "2px 8px",
-                        borderRadius: "12px",
-                        background: selectedLead.confidence === "high" ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                        color: selectedLead.confidence === "high" ? "#10b981" : "#f59e0b",
-                      }}
-                    >
-                      {selectedLead.confidence ? `${selectedLead.confidence.toUpperCase()} CONFIDENCE` : "VALIDATED"}
-                    </span>
                   </div>
                   <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
                     {selectedLead.company}
@@ -480,6 +532,28 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                     <strong style={{ textTransform: "capitalize" }}>{selectedLead.site}</strong>
                   </div>
                 )}
+                <div>
+                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>DATE POSTED</span>
+                  <strong>{formatDate(selectedLead.date_posted)}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>DATE SCRAPED</span>
+                  <strong>{formatDate(selectedLead.scraped_at || selectedLead.created_at)}</strong>
+                </div>
+                {selectedLead.job_url && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>LINKEDIN / JOB URL</span>
+                    <a
+                      href={selectedLead.job_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#0a66c2", display: "inline-flex", alignItems: "center", gap: "5px", fontWeight: 600, wordBreak: "break-all", fontSize: "0.82rem", textDecoration: "none" }}
+                    >
+                      <ExternalLink style={{ width: "13px", height: "13px", flexShrink: 0 }} />
+                      <span>{selectedLead.job_url}</span>
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Contacts Section */}
@@ -536,15 +610,15 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                         </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          {c.linkedin && (
+                          {(c.linkedin_url || c.linkedin) && (
                             <a
-                              href={c.linkedin}
+                              href={c.linkedin_url || c.linkedin}
                               target="_blank"
                               rel="noreferrer"
                               className="btn btn-secondary btn-sm"
-                              style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none" }}
+                              style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none", color: "#0a66c2", fontWeight: 600 }}
                             >
-                              LinkedIn →
+                              LinkedIn Profile →
                             </a>
                           )}
                         </div>
@@ -728,15 +802,26 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Location</label>
+                    <label>LinkedIn / Job URL</label>
                     <input
-                      type="text"
+                      type="url"
                       className="eu-input"
-                      placeholder="e.g. Remote, San Francisco, CA"
-                      value={manualForm.location}
-                      onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
+                      placeholder="https://www.linkedin.com/jobs/view/..."
+                      value={manualForm.job_url}
+                      onChange={(e) => setManualForm({ ...manualForm, job_url: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Location</label>
+                  <input
+                    type="text"
+                    className="eu-input"
+                    placeholder="e.g. Remote, San Francisco, CA"
+                    value={manualForm.location}
+                    onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
+                  />
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>

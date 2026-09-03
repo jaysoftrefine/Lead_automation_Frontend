@@ -15,6 +15,17 @@ export async function fetchJson<T = any>(url: string, options: RequestInit = {})
   return data;
 }
 
+export function getPipelineWsUrl(): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  if (apiBase) {
+    const wsProto = apiBase.startsWith("https") ? "wss:" : "ws:";
+    const host = apiBase.replace(/^https?:\/\//, "");
+    return `${wsProto}//${host}/api/pipeline/ws`;
+  }
+  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProto}//${window.location.host}/api/pipeline/ws`;
+}
+
 // ─────────────────────────────────────────────
 // Pipeline & Scraper API
 // ─────────────────────────────────────────────
@@ -33,6 +44,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getPipelineStatus: () => fetchJson("/api/pipeline/status"),
+  getPipelineWsUrl,
   stopPipeline: () => fetchJson("/api/pipeline/stop", { method: "POST" }),
 
   // Leads

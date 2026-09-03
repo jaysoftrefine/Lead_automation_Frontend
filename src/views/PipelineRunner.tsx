@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Terminal, Sliders, Globe, Cpu, CheckCircle, AlertTriangle } from "lucide-react";
-import { api } from "../services/api";
+import { Play, Square, Terminal, Sliders, Globe, Cpu, CheckCircle, AlertTriangle, Wifi } from "lucide-react";
+import { api, getPipelineWsUrl } from "../services/api";
 
 export interface PipelineRunnerProps {
   onToast: (message: string, type?: string) => void;
@@ -10,12 +10,13 @@ export interface PipelineRunnerProps {
 export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps) {
   const [platforms, setPlatforms] = useState<Record<string, boolean>>({
     linkedin: true,
-    indeed: true,
+    /* indeed: false,
     glassdoor: false,
-    zip_recruiter: false,
+    zip_recruiter: false, */
   });
   const [searchTerm, setSearchTerm] = useState("Software Engineer");
   const [location, setLocation] = useState("United States");
+  const [companySize, setCompanySize] = useState("small");
   const [resultsLimit, setResultsLimit] = useState<string | number>(15);
   const [isRunning, setIsRunning] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
@@ -23,11 +24,36 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
     "Configure search parameters on the left and click 'Start Autonomous Engine'.",
   ]);
   const [metrics, setMetrics] = useState({ scraped: 0, enriched: 0, status: "idle" });
+  const [wsConnected, setWsConnected] = useState(false);
 
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
 
   const togglePlatform = (key: string) => {
     setPlatforms((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const applyStateUpdate = (d: any) => {
+    if (!d) return;
+    const running = Boolean(
+      d.is_running ||
+      d.status === "running" ||
+      d.status === "scraping" ||
+      d.status === "enriching"
+    );
+    setIsRunning(running);
+    if (onStatusChange) onStatusChange(running);
+    setMetrics({
+      scraped: d.processed_count || d.scraped_count || 0,
+      enriched: d.metrics?.saved_to_db || d.enriched_count || 0,
+      status: d.status || "idle",
+    });
+
+    if (d.logs && Array.isArray(d.logs) && d.logs.length > 0) {
+      const formatted = d.logs.map((l: any) =>
+        typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
+      );
+      setTerminalLogs(formatted);
+    }
   };
 
   const handleStart = async () => {
@@ -46,7 +72,7 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
       if (onStatusChange) onStatusChange(true);
       setTerminalLogs((prev) => [
         ...prev,
-        `[${new Date().toLocaleTimeString()}] Starting pipeline for "${searchTerm}" in "${location}" across [${selectedPlatforms.join(", ")}]...`,
+        `[${new Date().toLocaleTimeString()}] Starting pipeline for "${searchTerm}" in "${location}" (Target Size: Small/Startup <=50) across [${selectedPlatforms.join(", ")}]...`,
       ]);
 
       const res = await api.startPipeline({
@@ -54,24 +80,12 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
         search_term: searchTerm.trim(),
         location: location.trim(),
         limit: parseInt(String(resultsLimit), 10) || 15,
-        company_size: "all",
+        company_size: companySize || "small",
         provider: "gemini",
         is_remote: true,
       });
 
       onToast(res.message || "Pipeline started successfully!", "success");
-      // Trigger status check immediately
-      setTimeout(() => {
-        api.getPipelineStatus().then((statusRes: any) => {
-          const d = statusRes?.data || statusRes;
-          if (d?.logs) {
-            const formatted = d.logs.map((l: any) =>
-              typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
-            );
-            setTerminalLogs(formatted);
-          }
-        });
-      }, 200);
     } catch (e: any) {
       setIsRunning(false);
       if (onStatusChange) onStatusChange(false);
@@ -90,43 +104,55 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
     }
   };
 
-  // Poll status while running
+  // Real-time WebSocket connection for live pipeline status, metrics, and logs
   useEffect(() => {
-    let interval: any = null;
-    const checkStatus = async () => {
-      try {
-        const res = await api.getPipelineStatus();
-        const d = res?.data || res;
-        if (d) {
-          const running = Boolean(d.is_running || d.status === "running" || d.status === "scraping" || d.status === "enriching");
-          setIsRunning(running);
-          if (onStatusChange) onStatusChange(running);
-          setMetrics({
-            scraped: d.processed_count || d.scraped_count || 0,
-            enriched: d.metrics?.saved_to_db || d.enriched_count || 0,
-            status: d.status || "idle",
-          });
+    let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+    let isMounted = true;
 
-          if (d.logs && Array.isArray(d.logs) && d.logs.length > 0) {
-            const formatted = d.logs.map((l: any) =>
-              typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
-            );
-            setTerminalLogs(formatted);
+    const connectWs = () => {
+      try {
+        const wsUrl = getPipelineWsUrl();
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          if (isMounted) setWsConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            applyStateUpdate(data);
+          } catch {
+            // ignore non-JSON messages like pong
           }
+        };
+
+        ws.onclose = () => {
+          if (isMounted) {
+            setWsConnected(false);
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
+      } catch (err) {
+        if (isMounted) {
+          reconnectTimer = setTimeout(connectWs, 3000);
         }
-      } catch (e) {
-        // ignore polling errors
       }
     };
 
-    checkStatus();
-    if (isRunning) {
-      interval = setInterval(checkStatus, 2000);
-    }
+    connectWs();
+
     return () => {
-      if (interval) clearInterval(interval);
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
     };
-  }, [isRunning]);
+  }, []);
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -159,7 +185,7 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
                 />
                 <span className="chip-content">LinkedIn</span>
               </label>
-              <label className="checkbox-chip">
+              {/* <label className="checkbox-chip">
                 <input
                   type="checkbox"
                   checked={platforms.indeed}
@@ -182,7 +208,7 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
                   onChange={() => togglePlatform("zip_recruiter")}
                 />
                 <span className="chip-content">ZipRecruiter</span>
-              </label>
+              </label> */}
             </div>
           </div>
 
@@ -212,20 +238,35 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
             </div>
           </div>
 
-          {/* Limit */}
-          <div className="form-group">
-            <label htmlFor="limit">Job Scraping Limit</label>
-            <select
-              id="limit"
-              value={resultsLimit}
-              onChange={(e) => setResultsLimit(e.target.value)}
-            >
-              <option value="5">5 Job Postings</option>
-              <option value="10">10 Job Postings</option>
-              <option value="15">15 Job Postings (Recommended)</option>
-              <option value="30">30 Job Postings</option>
-              <option value="50">50 Job Postings</option>
-            </select>
+          {/* Company Size & Limit */}
+          <div className="form-row">
+            <div className="form-group flex-1">
+              <label htmlFor="company-size">Target Company Size</label>
+              <select
+                id="company-size"
+                value={companySize}
+                onChange={(e) => setCompanySize(e.target.value)}
+              >
+                <option value="small">Small / Startup (1–50 employees) [Default]</option>
+                <option value="medium">Medium (51–500 employees)</option>
+                <option value="large">Large Enterprise (500+ employees)</option>
+                <option value="all">All Company Sizes</option>
+              </select>
+            </div>
+            <div className="form-group flex-1">
+              <label htmlFor="limit">Job Scraping Limit</label>
+              <select
+                id="limit"
+                value={resultsLimit}
+                onChange={(e) => setResultsLimit(e.target.value)}
+              >
+                <option value="5">5 Job Postings</option>
+                <option value="10">10 Job Postings</option>
+                <option value="15">15 Job Postings (Recommended)</option>
+                <option value="30">30 Job Postings</option>
+                <option value="50">50 Job Postings</option>
+              </select>
+            </div>
           </div>
 
           {/* Actions */}
@@ -256,7 +297,25 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
             <Terminal style={{ width: "18px", height: "18px", color: "var(--accent-emerald)" }} />
             <h2>Live Execution Stream</h2>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {wsConnected && (
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  backgroundColor: "rgba(16, 185, 129, 0.12)",
+                  color: "#10b981",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontWeight: 500,
+                }}
+                title="Real-time WebSocket Stream Connected"
+              >
+                <Wifi style={{ width: "12px", height: "12px" }} /> Live
+              </span>
+            )}
             <span className={`pulse-dot ${isRunning ? "running" : ""}`} />
             <span style={{ fontSize: "0.76rem", color: isRunning ? "#10b981" : "var(--text-dim)", fontWeight: 600 }}>
               {isRunning ? "Active Agent" : "Idle"}

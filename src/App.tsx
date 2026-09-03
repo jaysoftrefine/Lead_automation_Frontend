@@ -87,12 +87,12 @@ export function App() {
 
       {/* Active Tab View */}
       <main style={{ marginTop: "0.25rem" }}>
-        {activeTab === "pipeline" && (
+        <div style={{ display: activeTab === "pipeline" ? "block" : "none" }}>
           <PipelineRunner
             onToast={showToast}
             onStatusChange={(running) => setIsPipelineRunning(running)}
           />
-        )}
+        </div>
 
         {activeTab === "leads" && <LeadsExplorer onToast={showToast} />}
 
