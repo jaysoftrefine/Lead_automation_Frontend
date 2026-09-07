@@ -23,6 +23,12 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [companySize, setCompanySize] = useState("");
+  const [activeLeadType, setActiveLeadType] = useState<"all" | "company" | "personal" | "others">("all");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [typeCounts, setTypeCounts] = useState({ all: 0, company: 0, personal: 0, others: 0 });
+  const perPage = 50;
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [submittingLead, setSubmittingLead] = useState(false);
@@ -34,6 +40,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     location: "Remote",
     company_size: "Small (1-50)",
     job_type: "Full-time",
+    lead_type: "company",
     lead_summary: "",
     key_technologies: "",
     contact_name: "",
@@ -68,6 +75,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
         location: manualForm.location.trim() || "Remote",
         company_size: manualForm.company_size,
         job_type: manualForm.job_type,
+        lead_type: manualForm.lead_type,
         lead_summary: manualForm.lead_summary.trim(),
         key_technologies: manualForm.key_technologies
           ? manualForm.key_technologies.split(",").map((t: string) => t.trim()).filter(Boolean)
@@ -85,6 +93,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
         location: "Remote",
         company_size: "Small (1-50)",
         job_type: "Full-time",
+        lead_type: "company",
         lead_summary: "",
         key_technologies: "",
         contact_name: "",
@@ -112,13 +121,30 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     };
   }, [selectedLead, showAddModal]);
 
-  const loadLeads = async () => {
+  const loadLeads = async (
+    targetPage = page,
+    targetType = activeLeadType,
+    targetCompanySize = companySize,
+    targetSearch = searchTerm
+  ) => {
     setLoading(true);
+    setPage(targetPage);
     try {
-      const params: Record<string, any> = {};
-      if (companySize) params.company_size = companySize;
+      const params: Record<string, any> = {
+        page: targetPage,
+        limit: perPage,
+      };
+      if (targetCompanySize) params.company_size = targetCompanySize;
+      if (targetType && targetType !== "all") params.lead_type = targetType;
+      if (targetSearch.trim()) params.search = targetSearch.trim();
+
       const res = await api.getLeads(params);
       setLeads(res.leads || res.data || []);
+      setTotalPages(res.total_pages || 1);
+      setTotalResults(res.total ?? 0);
+      if (res.type_counts) {
+        setTypeCounts(res.type_counts);
+      }
     } catch (e: any) {
       onToast(e.message, "error");
     } finally {
@@ -127,26 +153,35 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   };
 
   useEffect(() => {
-    loadLeads();
-  }, [companySize]);
+    const timer = setTimeout(() => {
+      loadLeads(1, activeLeadType, companySize, searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm, companySize, activeLeadType]);
 
-  // Filter in memory for instantaneous search
-  const filteredLeads = leads.filter((l) => {
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase();
-    const company = (l.company || "").toLowerCase();
-    const location = (l.location || "").toLowerCase();
-    const roles = (l.contacts || []).map((c: any) => (c.name || "") + " " + (c.role || "")).join(" ").toLowerCase();
-    return company.includes(term) || location.includes(term) || roles.includes(term);
-  });
+  const handleLeadTypeChange = async (job_url: string, newType: string) => {
+    // Optimistically update local state
+    setLeads((prev) =>
+      prev.map((l) => (l.job_url === job_url ? { ...l, lead_type: newType } : l))
+    );
+    try {
+      await (api as any).updateLeadType(job_url, newType);
+      onToast(`Lead type updated to "${newType}"`, "success");
+      // Reload in background to sync counts & pagination
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+    } catch (e: any) {
+      onToast(e.message || "Failed to update lead type", "error");
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+    }
+  };
 
   const exportData = (format: "json" | "csv") => {
-    if (filteredLeads.length === 0) {
+    if (leads.length === 0) {
       onToast("No leads to export", "error");
       return;
     }
     if (format === "json") {
-      const blob = new Blob([JSON.stringify(filteredLeads, null, 2)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(leads, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -155,7 +190,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     } else {
       // CSV
       const headers = ["Company", "Location", "Website", "LinkedIn / Job URL", "Size", "Date Posted", "Date Scraped", "Contacts", "Contact LinkedIn URLs"];
-      const rows = filteredLeads.map((l) => [
+      const rows = leads.map((l) => [
         `"${(l.company || "").replace(/"/g, '""')}"`,
         `"${(l.location || "").replace(/"/g, '""')}"`,
         `"${l.company_domain || ""}"`,
@@ -174,7 +209,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       a.download = `leads_export_${Date.now()}.csv`;
       a.click();
     }
-    onToast(`Exported ${filteredLeads.length} leads as ${format.toUpperCase()}`, "success");
+    onToast(`Exported ${leads.length} leads as ${format.toUpperCase()}`, "success");
   };
 
   return (
@@ -183,7 +218,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div className="card-title-group">
           <Database style={{ width: "18px", height: "18px", color: "var(--accent-cyan)" }} />
-          <h2>Discovered Leads ({filteredLeads.length})</h2>
+          <h2>Discovered Leads ({typeCounts.all || totalResults})</h2>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
@@ -223,7 +258,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
           </select>
 
           {/* Refresh */}
-          <button onClick={loadLeads} className="btn-icon-ghost" title="Refresh Leads">
+          <button onClick={() => loadLeads(page)} className="btn-icon-ghost" title="Refresh Leads">
             <RefreshCw style={{ width: "14px", height: "14px" }} />
           </button>
 
@@ -244,6 +279,48 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
             <Plus style={{ width: "14px", height: "14px" }} /> Add Lead
           </button>
         </div>
+      </div>
+
+      {/* Lead Type Tabs */}
+      <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
+        {([
+          { key: "all", label: "All Leads", count: typeCounts.all },
+          { key: "company", label: "🏢 Company", count: typeCounts.company },
+          { key: "personal", label: "👤 Personal", count: typeCounts.personal },
+          { key: "others", label: "❓ Others", count: typeCounts.others },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => {
+              setActiveLeadType(tab.key);
+              setPage(1);
+            }}
+            style={{
+              padding: "0.5rem 1rem",
+              border: "none",
+              borderBottom: activeLeadType === tab.key ? "2px solid var(--accent-cyan)" : "2px solid transparent",
+              background: "transparent",
+              color: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--text-muted)",
+              fontWeight: activeLeadType === tab.key ? 600 : 400,
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.2s",
+            }}
+          >
+            {tab.label}
+            <span style={{
+              background: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--border-color)",
+              color: activeLeadType === tab.key ? "#fff" : "var(--text-muted)",
+              borderRadius: "999px",
+              padding: "1px 7px",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+            }}>{tab.count}</span>
+          </button>
+        ))}
       </div>
 
       {/* Leads Table */}
@@ -269,14 +346,14 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                   </div>
                 </td>
               </tr>
-            ) : filteredLeads.length === 0 ? (
+            ) : leads.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                   No leads found. Run the Pipeline Runner to scrape and discover B2B leads.
                 </td>
               </tr>
             ) : (
-              filteredLeads.map((lead, idx) => (
+              leads.map((lead, idx) => (
                 <tr key={lead._id || idx}>
                   <td>
                     <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
@@ -405,20 +482,80 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                   </td>
 
                   <td>
-                    <button
-                      onClick={() => setSelectedLead(lead)}
-                      className="btn btn-sm btn-secondary"
-                      title="View Lead Research Details"
-                    >
-                      <Eye style={{ width: "13px", height: "13px" }} />
-                      <span>Details</span>
-                    </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" }}>
+                      <button
+                        onClick={() => setSelectedLead(lead)}
+                        className="btn btn-sm btn-secondary"
+                        title="View Lead Research Details"
+                      >
+                        <Eye style={{ width: "13px", height: "13px" }} />
+                        <span>Details</span>
+                      </button>
+                      <select
+                        value={lead.lead_type || "others"}
+                        onChange={(e) => handleLeadTypeChange(lead.job_url, e.target.value)}
+                        style={{
+                          fontSize: "0.72rem",
+                          padding: "3px 7px",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-color)",
+                          background: lead.lead_type === "company"
+                            ? "rgba(6,182,212,0.12)"
+                            : lead.lead_type === "personal"
+                            ? "rgba(139,92,246,0.12)"
+                            : "var(--chip-bg)",
+                          color: lead.lead_type === "company"
+                            ? "var(--accent-cyan)"
+                            : lead.lead_type === "personal"
+                            ? "#a78bfa"
+                            : "var(--text-muted)",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          width: "100%",
+                        }}
+                        title="Change lead type"
+                      >
+                        <option value="company">🏢 Company</option>
+                        <option value="personal">👤 Personal</option>
+                        <option value="others">❓ Others</option>
+                      </select>
+                    </div>
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination & Results Summary */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+          {totalResults > 0
+            ? `Showing ${Math.min((page - 1) * perPage + 1, totalResults)}–${Math.min(page * perPage, totalResults)} of ${totalResults} leads`
+            : "0 leads"}
+        </div>
+        {totalPages > 1 && (
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              disabled={page <= 1 || loading}
+              onClick={() => loadLeads(page - 1)}
+              className="btn btn-secondary btn-sm"
+            >
+              ‹ Previous
+            </button>
+            <span style={{ display: "flex", alignItems: "center", padding: "0 10px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages || loading}
+              onClick={() => loadLeads(page + 1)}
+              className="btn btn-secondary btn-sm"
+            >
+              Next ›
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Lead Detail Modal (Rendered to body via createPortal) */}
@@ -822,6 +959,51 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                     value={manualForm.location}
                     onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
                   />
+                </div>
+
+                {/* Lead Type Classification */}
+                <div className="form-group">
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ fontWeight: 600 }}>Lead Type *</span>
+                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Target Classification</span>
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.6rem" }}>
+                    {[
+                      { key: "company", icon: "🏢", label: "Company", desc: "Finding a company / agency" },
+                      { key: "personal", icon: "👤", label: "Personal", desc: "Finding person / freelancer" },
+                      { key: "others", icon: "❓", label: "Others", desc: "Unspecified / General" },
+                    ].map((t) => (
+                      <div
+                        key={t.key}
+                        onClick={() => setManualForm({ ...manualForm, lead_type: t.key })}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: manualForm.lead_type === t.key ? "2px solid var(--accent-cyan)" : "1px solid var(--border-color)",
+                          background: manualForm.lead_type === t.key ? "rgba(6, 182, 212, 0.12)" : "var(--chip-bg)",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "3px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "1rem" }}>{t.icon}</span>
+                          <span style={{
+                            fontWeight: manualForm.lead_type === t.key ? 700 : 600,
+                            fontSize: "0.86rem",
+                            color: manualForm.lead_type === t.key ? "var(--accent-cyan)" : "var(--text-primary)"
+                          }}>
+                            {t.label}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1.3 }}>
+                          {t.desc}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>

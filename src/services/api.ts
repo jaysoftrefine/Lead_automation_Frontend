@@ -57,6 +57,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateLeadType: (job_url: string, lead_type: string) =>
+    fetchJson("/api/leads/update-lead-type", {
+      method: "POST",
+      body: JSON.stringify({ job_url, lead_type }),
+    }),
 
   // Instant Agent Lab
   runAgentResearch: (payload: any) =>

@@ -60,11 +60,9 @@ export function App() {
     } catch (e) {}
   };
 
-  // Load global stats on mount and refresh every 30s
+  // Load global stats once on mount only
   useEffect(() => {
     loadGlobalStats();
-    const interval = setInterval(loadGlobalStats, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -92,7 +90,11 @@ export function App() {
         <div style={{ display: activeTab === "pipeline" ? "block" : "none" }}>
           <PipelineRunner
             onToast={showToast}
-            onStatusChange={(running) => setIsPipelineRunning(running)}
+            onStatusChange={(running) => {
+              setIsPipelineRunning(running);
+              // Refresh badge counts when pipeline finishes
+              if (!running) loadGlobalStats();
+            }}
           />
         </div>
 
