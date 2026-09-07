@@ -113,6 +113,7 @@ export function EmailCampaigns({
   const [audSources, setAudSources] = useState({ sqlite: true, mongo: false, manual: false });
   const [audCountry, setAudCountry] = useState("");
   const [audCategory, setAudCategory] = useState("");
+  const [audLeadType, setAudLeadType] = useState("all"); // 'all' | 'company' | 'personal' | 'others'
   const [audManualEmails, setAudManualEmails] = useState("");
   const [audSelectedContacts, setAudSelectedContacts] = useState([]);
   const [audEstimatedCount, setAudEstimatedCount] = useState(null);
@@ -741,6 +742,7 @@ export function EmailCampaigns({
         country: audCountry.trim(),
         category: audCategory.trim(),
         search: audBrowseSearch.trim(),
+        lead_type: (audSources.mongo && audLeadType !== "all") ? audLeadType : "",
         page,
         per_page: 25,
       });
@@ -763,7 +765,7 @@ export function EmailCampaigns({
       loadBrowseContacts(1);
     }, 250);
     return () => clearTimeout(timer);
-  }, [activePanel, audSources.sqlite, audSources.mongo, audCountry, audCategory, audBrowseSearch]);
+  }, [activePanel, audSources.sqlite, audSources.mongo, audCountry, audCategory, audBrowseSearch, audLeadType]);
 
   const toggleSelectBrowseContact = (contact) => {
     const key = (contact.email || contact.id).toLowerCase();
@@ -867,6 +869,7 @@ export function EmailCampaigns({
         filters: {
           country: audCountry.trim(),
           category: audCategory.trim(),
+          lead_type: audLeadType,
         },
         manual_recipients: manualList,
         selected_recipients: audSelectedContacts.map((c) => ({
@@ -911,6 +914,7 @@ export function EmailCampaigns({
     });
     setAudCountry(aud.filters?.country || "");
     setAudCategory(aud.filters?.category || "");
+    setAudLeadType(aud.filters?.lead_type || "all");
     const manualArr = aud.manual_recipients || [];
     setAudManualEmails(manualArr.map((m) => (typeof m === "string" ? m : m.email || "")).join("\n"));
     const sel = aud.selected_recipients || [];
@@ -931,6 +935,7 @@ export function EmailCampaigns({
     setAudSources({ sqlite: true, mongo: false, manual: false });
     setAudCountry("");
     setAudCategory("");
+    setAudLeadType("all");
     setAudManualEmails("");
     setAudSelectedContacts([]);
     setAudSelectedMap({});
@@ -2589,6 +2594,54 @@ export function EmailCampaigns({
                       </span>
                     </label>
 
+                    {audSources.mongo && (
+                      <div
+                        style={{
+                          marginTop: "-2px",
+                          marginBottom: "4px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          background: "rgba(16, 185, 129, 0.05)",
+                          border: "1px solid rgba(16, 185, 129, 0.25)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                        }}
+                      >
+                        <span style={{ fontSize: "0.74rem", color: "var(--accent-emerald)", fontWeight: 700 }}>
+                          LinkedIn Lead Type:
+                        </span>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
+                          {[
+                            { key: "all", label: "All Leads" },
+                            { key: "company", label: "🏢 Company" },
+                            { key: "personal", label: "👤 Personal" },
+                            { key: "others", label: "❓ Others" },
+                          ].map((opt) => (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() => setAudLeadType(opt.key)}
+                              style={{
+                                padding: "6px 8px",
+                                fontSize: "0.75rem",
+                                borderRadius: "6px",
+                                border: audLeadType === opt.key ? "1.5px solid var(--accent-emerald)" : "1px solid var(--border-subtle)",
+                                background: audLeadType === opt.key ? "rgba(16, 185, 129, 0.18)" : "var(--chip-bg)",
+                                color: audLeadType === opt.key ? "var(--accent-emerald)" : "var(--text-secondary)",
+                                fontWeight: audLeadType === opt.key ? 700 : 500,
+                                cursor: "pointer",
+                                textAlign: "center",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <label
                       className="checkbox-chip"
                       style={{
@@ -2861,6 +2914,61 @@ export function EmailCampaigns({
                   </div>
                 </div>
 
+                {/* Lead Type Tabs Filter when LinkedIn Leads selected */}
+                {audSources.mongo && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      borderBottom: "1px solid var(--border-subtle)",
+                      paddingBottom: "2px",
+                      marginBottom: "-4px",
+                    }}
+                  >
+                    {[
+                      { key: "all", label: "All Leads" },
+                      { key: "company", label: "🏢 Company" },
+                      { key: "personal", label: "👤 Personal" },
+                      { key: "others", label: "❓ Others" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => {
+                          setAudLeadType(tab.key);
+                          setAudBrowsePage(1);
+                        }}
+                        style={{
+                          padding: "0.42rem 0.85rem",
+                          border: "none",
+                          borderBottom:
+                            audLeadType === tab.key
+                              ? "2.5px solid var(--accent-emerald)"
+                              : "2.5px solid transparent",
+                          background:
+                            audLeadType === tab.key
+                              ? "rgba(16, 185, 129, 0.08)"
+                              : "transparent",
+                          color:
+                            audLeadType === tab.key
+                              ? "var(--accent-emerald)"
+                              : "var(--text-muted)",
+                          fontWeight: audLeadType === tab.key ? 700 : 500,
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          borderRadius: "6px 6px 0 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* ImHUB Style Table */}
                 <div
                   style={{
@@ -3038,6 +3146,40 @@ export function EmailCampaigns({
                                   >
                                     {c.source === "sqlite" ? "EU Startups" : "LinkedIn Leads"}
                                   </span>
+                                  {c.source !== "sqlite" && c.lead_type && (
+                                    <span
+                                      style={{
+                                        fontSize: "0.72rem",
+                                        padding: "2px 7px",
+                                        borderRadius: "5px",
+                                        background:
+                                          c.lead_type === "company"
+                                            ? "rgba(59, 130, 246, 0.15)"
+                                            : c.lead_type === "personal"
+                                            ? "rgba(168, 85, 247, 0.15)"
+                                            : "rgba(107, 114, 128, 0.15)",
+                                        color:
+                                          c.lead_type === "company"
+                                            ? "#3b82f6"
+                                            : c.lead_type === "personal"
+                                            ? "#a855f7"
+                                            : "var(--text-muted)",
+                                        border:
+                                          c.lead_type === "company"
+                                            ? "1px solid rgba(59, 130, 246, 0.3)"
+                                            : c.lead_type === "personal"
+                                            ? "1px solid rgba(168, 85, 247, 0.3)"
+                                            : "1px solid rgba(107, 114, 128, 0.3)",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {c.lead_type === "company"
+                                        ? "🏢 Company"
+                                        : c.lead_type === "personal"
+                                        ? "👤 Personal"
+                                        : "❓ Others"}
+                                    </span>
+                                  )}
                                   {c.country && (
                                     <span
                                       style={{
