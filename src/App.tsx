@@ -100,7 +100,9 @@ export function App() {
 
         {activeTab === "leads" && <LeadsExplorer onToast={showToast} />}
 
-        {activeTab === "instant-research" && <InstantAgentLab onToast={showToast} />}
+        {activeTab === "instant-research" && (
+          <InstantAgentLab onToast={showToast} onRefreshStats={loadGlobalStats} />
+        )}
 
         {activeTab === "eu-startups" && <EUStartupsExplorer onToast={showToast} />}
 

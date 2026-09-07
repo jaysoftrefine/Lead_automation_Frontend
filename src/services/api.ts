@@ -63,9 +63,24 @@ export const api = {
       body: JSON.stringify({ job_url, lead_type }),
     }),
 
-  // Instant Agent Lab
+  // Instant Agent Lab & Research Leads
   runAgentResearch: (payload: any) =>
     fetchJson("/api/instant-research", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  checkLeadsPresence: (leads: any[]) =>
+    fetchJson("/api/leads/check-presence", {
+      method: "POST",
+      body: JSON.stringify({ leads }),
+    }),
+  addLeadFromAgent: (payload: any) =>
+    fetchJson("/api/leads/add-from-agent", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  addBatchLeadsFromAgent: (payload: any) =>
+    fetchJson("/api/leads/add-batch-from-agent", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
