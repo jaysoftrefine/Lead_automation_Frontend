@@ -378,26 +378,101 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                           <span>{lead.company_domain}</span>
                         </a>
                       )}
-                      {lead.job_url && (
-                        <a
-                          href={lead.job_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#0a66c2",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            textDecoration: "none",
-                            fontWeight: 600,
-                          }}
-                          title="Open LinkedIn Job Posting"
-                        >
-                          <ExternalLink style={{ width: "11px", height: "11px" }} />
-                          <span>LinkedIn Job</span>
-                        </a>
-                      )}
+                      {/* Company LinkedIn or Job Posting Link */}
+                      {(() => {
+                        const isHttp =
+                          lead.job_url &&
+                          (lead.job_url.startsWith("http://") || lead.job_url.startsWith("https://"));
+                        const isAgent =
+                          lead.site === "instant_agent" ||
+                          (lead.job_url && lead.job_url.startsWith("agent://"));
+                        const isManual =
+                          lead.site === "manual" ||
+                          (lead.job_url && lead.job_url.startsWith("manual://"));
+
+                        if (isHttp) {
+                          const isLinkedIn = lead.job_url.includes("linkedin.com");
+                          return (
+                            <a
+                              href={lead.job_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: "0.75rem",
+                                color: isLinkedIn ? "#0a66c2" : "var(--accent-cyan)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
+                                textDecoration: "none",
+                                fontWeight: 600,
+                              }}
+                              title={isLinkedIn ? "Open LinkedIn Job Posting" : "Open Original Job Posting"}
+                            >
+                              <ExternalLink style={{ width: "11px", height: "11px" }} />
+                              <span>{isLinkedIn ? "LinkedIn Job" : "Job Posting"}</span>
+                            </a>
+                          );
+                        }
+
+                        // For agent-researched or manual leads: provide real working LinkedIn company search link
+                        const linkedinSearchUrl = `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(lead.company)}`;
+
+                        return (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <a
+                              href={linkedinSearchUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#0a66c2",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
+                                textDecoration: "none",
+                                fontWeight: 600,
+                              }}
+                              title={`Search ${lead.company} on LinkedIn`}
+                            >
+                              <ExternalLink style={{ width: "11px", height: "11px" }} />
+                              <span>LinkedIn</span>
+                            </a>
+
+                            {isAgent && (
+                              <span
+                                style={{
+                                  fontSize: "0.68rem",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  background: "rgba(168, 85, 247, 0.12)",
+                                  color: "var(--accent-violet)",
+                                  border: "1px solid rgba(168, 85, 247, 0.3)",
+                                  fontWeight: 600,
+                                }}
+                                title="Discovered via Autonomous Research Agent"
+                              >
+                                AI Agent
+                              </span>
+                            )}
+                            {isManual && (
+                              <span
+                                style={{
+                                  fontSize: "0.68rem",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  background: "rgba(245, 158, 11, 0.12)",
+                                  color: "#f59e0b",
+                                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                                  fontWeight: 600,
+                                }}
+                                title="Manually Added Lead"
+                              >
+                                Manual
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </td>
 
@@ -679,16 +754,66 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                 </div>
                 {selectedLead.job_url && (
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>LINKEDIN / JOB URL</span>
-                    <a
-                      href={selectedLead.job_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "#0a66c2", display: "inline-flex", alignItems: "center", gap: "5px", fontWeight: 600, wordBreak: "break-all", fontSize: "0.82rem", textDecoration: "none" }}
-                    >
-                      <ExternalLink style={{ width: "13px", height: "13px", flexShrink: 0 }} />
-                      <span>{selectedLead.job_url}</span>
-                    </a>
+                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>
+                      {selectedLead.job_url.startsWith("http")
+                        ? "LINKEDIN / JOB URL"
+                        : selectedLead.job_url.startsWith("agent://")
+                        ? "LEAD SOURCE (AUTONOMOUS RESEARCH AGENT)"
+                        : "MANUAL LEAD IDENTIFIER"}
+                    </span>
+                    {selectedLead.job_url.startsWith("http") ? (
+                      <a
+                        href={selectedLead.job_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "#0a66c2",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          fontWeight: 600,
+                          wordBreak: "break-all",
+                          fontSize: "0.82rem",
+                          textDecoration: "none",
+                        }}
+                      >
+                        <ExternalLink style={{ width: "13px", height: "13px", flexShrink: 0 }} />
+                        <span>{selectedLead.job_url}</span>
+                      </a>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", flexWrap: "wrap" }}>
+                        <code
+                          style={{
+                            fontSize: "0.76rem",
+                            background: "var(--chip-bg)",
+                            padding: "3px 8px",
+                            borderRadius: "5px",
+                            color: "var(--text-muted)",
+                            border: "1px solid var(--border-subtle)",
+                          }}
+                        >
+                          {selectedLead.job_url}
+                        </code>
+                        <a
+                          href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(selectedLead.company)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "#0a66c2",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            textDecoration: "none",
+                          }}
+                          title={`Search ${selectedLead.company} on LinkedIn`}
+                        >
+                          <ExternalLink style={{ width: "12px", height: "12px" }} />
+                          <span>Search {selectedLead.company} on LinkedIn</span>
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

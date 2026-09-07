@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Bot, Sparkles, FileText, CheckCircle2, UserPlus, Loader2 } from "lucide-react";
+import { Bot, Sparkles, FileText, CheckCircle2, Building2, Loader2 } from "lucide-react";
 import { api } from "../services/api";
 
 export interface InstantAgentLabProps {
@@ -17,7 +17,6 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
       const saved = localStorage.getItem("hirepilot_agent_lab_result");
       if (saved) return JSON.parse(saved);
     } catch {}
-    // Seed with last research from session so cards and buttons are immediately present
     return {
       report: `# Executive Summary: Fast-Growing European B2B SaaS Startups in AI & Automation\n\nEurope's B2B SaaS ecosystem has demonstrated robust resilience, pivoting aggressively toward Artificial Intelligence and workflow automation. Driven by substantial venture capital infusions—ranging from massive early-stage seed rounds to late-stage unicorn rounds (such as Mistral AI, Osapiens, and Parloa)—European startups are defining global standards in generative AI, enterprise process automation, supply chain compliance, and intelligent orchestration.\n\n## Key Market Dynamics\n- **Sector Specialization:** Unlike broad consumer AI applications, European B2B SaaS startups excel in verticalized and governance-heavy domains like supply chain transparency (e.g., Osapiens), contact center automation (e.g., Parloa), legaltech, and developer tools.\n- **Funding Resilience:** Despite broader macroeconomic downturns, category-defining AI infrastructure and automation companies continue to attract massive rounds (e.g., Mistral AI's multi-million euro expansions, Osapiens' $100M Series C).\n- **Open Source and Enterprise Focus:** Startups are balancing community-driven open-source models with high-security, scalable enterprise platforms to capture high-margin B2B contracts globally.`,
       extracted_leads: [
@@ -77,11 +76,11 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
     return `${(lead.company || "").trim().toLowerCase()}::${(lead.name || "").trim().toLowerCase()}::${idx}`;
   };
 
-  // Check presence of extracted leads in SQLite on mount or when result changes
+  // Check presence of extracted startups & founders in EU Startups database
   useEffect(() => {
     if (result?.extracted_leads?.length) {
       api
-        .checkLeadsPresence(result.extracted_leads)
+        .checkStartupsPresence(result.extracted_leads)
         .then((presenceRes: any) => {
           if (presenceRes?.results) {
             setAddedMap((prev) => {
@@ -121,14 +120,29 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
         localStorage.setItem("hirepilot_agent_lab_result", JSON.stringify(res));
       } catch {}
 
-      // Pre-populate already_exists status from backend
-      const initialAdded: Record<string, boolean> = {};
-      (res.extracted_leads || []).forEach((l: any, idx: number) => {
-        if (l.already_exists) {
-          initialAdded[getLeadKey(l, idx)] = true;
-        }
-      });
-      setAddedMap(initialAdded);
+      // Pre-check presence in EU Startups
+      if (res.extracted_leads?.length) {
+        api
+          .checkStartupsPresence(res.extracted_leads)
+          .then((presenceRes: any) => {
+            if (presenceRes?.results) {
+              const initialAdded: Record<string, boolean> = {};
+              res.extracted_leads.forEach((l: any, idx: number) => {
+                const k = getLeadKey(l, idx);
+                const pres =
+                  presenceRes.results[l.email?.toLowerCase().trim()] ||
+                  presenceRes.results[
+                    `${l.company?.toLowerCase().trim()}::${l.name?.toLowerCase().trim()}`
+                  ];
+                if (pres?.already_exists) {
+                  initialAdded[k] = true;
+                }
+              });
+              setAddedMap(initialAdded);
+            }
+          })
+          .catch(() => {});
+      }
 
       onToast("Agent research complete!", "success");
     } catch (e: any) {
@@ -138,12 +152,12 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
     }
   };
 
-  const handleAddLead = async (lead: any, idx: number) => {
+  const handleAddStartup = async (lead: any, idx: number) => {
     const key = getLeadKey(lead, idx);
     setAddingMap((prev) => ({ ...prev, [key]: true }));
 
     try {
-      const res = await api.addLeadFromAgent({
+      const res = await api.addStartupFromAgent({
         name: lead.name,
         role: lead.role,
         company: lead.company,
@@ -152,31 +166,31 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
       });
 
       setAddedMap((prev) => ({ ...prev, [key]: true }));
-      onToast(res.message || `Added ${lead.name || lead.company} to Leads!`, "success");
+      onToast(res.message || `Added ${lead.name || lead.company} to EU Startups!`, "success");
       if (onRefreshStats) onRefreshStats();
     } catch (err: any) {
-      onToast(err.message || "Failed to add lead to database", "error");
+      onToast(err.message || "Failed to add startup to EU Startups Explorer", "error");
     } finally {
       setAddingMap((prev) => ({ ...prev, [key]: false }));
     }
   };
 
-  const handleAddAllLeads = async () => {
+  const handleAddAllStartups = async () => {
     if (!result?.extracted_leads?.length) return;
 
     const toAdd = result.extracted_leads.filter(
-      (l: any, idx: number) => !addedMap[getLeadKey(l, idx)] && !l.already_exists
+      (l: any, idx: number) => !addedMap[getLeadKey(l, idx)]
     );
 
     if (toAdd.length === 0) {
-      onToast("All contacts are already present in Leads!", "info");
+      onToast("All startups & contacts are already in EU Startups!", "info");
       return;
     }
 
     setAddingAll(true);
     try {
-      const res = await api.addBatchLeadsFromAgent({
-        leads: toAdd.map((l: any) => ({
+      const res = await api.addBatchStartupsFromAgent({
+        startups: toAdd.map((l: any) => ({
           name: l.name,
           role: l.role,
           company: l.company,
@@ -193,12 +207,12 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
       setAddedMap(newAdded);
 
       onToast(
-        res.message || `Successfully added ${res.added_count || toAdd.length} lead(s) to database!`,
+        res.message || `Successfully added ${res.added_count || toAdd.length} startup(s) to EU Startups Explorer!`,
         "success"
       );
       if (onRefreshStats) onRefreshStats();
     } catch (err: any) {
-      onToast(err.message || "Failed to add leads to database", "error");
+      onToast(err.message || "Failed to add startups to database", "error");
     } finally {
       setAddingAll(false);
     }
@@ -266,7 +280,7 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
               </span>
               <button
                 type="button"
-                onClick={handleAddAllLeads}
+                onClick={handleAddAllStartups}
                 disabled={addingAll}
                 className="btn btn-secondary btn-sm"
                 style={{
@@ -285,12 +299,12 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                 {addingAll ? (
                   <>
                     <Loader2 style={{ width: "12px", height: "12px", animation: "spin 1s linear infinite" }} />
-                    <span>Saving to Leads...</span>
+                    <span>Saving to EU Startups...</span>
                   </>
                 ) : (
                   <>
-                    <UserPlus style={{ width: "12px", height: "12px" }} />
-                    <span>+ Add All to Leads</span>
+                    <Building2 style={{ width: "12px", height: "12px" }} />
+                    <span>+ Add All to EU Startups</span>
                   </>
                 )}
               </button>
@@ -336,7 +350,7 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                 {result.report || result.summary || result.analysis || JSON.stringify(result, null, 2)}
               </div>
 
-              {/* Discovered Leads/Contacts if available */}
+              {/* Discovered Startups/Contacts if available */}
               {result.extracted_leads && result.extracted_leads.length > 0 && (
                 <div>
                   <div
@@ -349,7 +363,7 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <h4 style={{ color: "var(--accent-cyan)", margin: 0, fontSize: "0.92rem", fontWeight: 700 }}>
-                        Extracted Key Contacts
+                        Extracted European Startups &amp; Founders
                       </h4>
                       <span
                         style={{
@@ -368,14 +382,14 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
 
                     {(() => {
                       const unaddedCount = result.extracted_leads.filter(
-                        (l: any, idx: number) => !addedMap[getLeadKey(l, idx)] && !l.already_exists
+                        (l: any, idx: number) => !addedMap[getLeadKey(l, idx)]
                       ).length;
 
                       if (unaddedCount > 0) {
                         return (
                           <button
                             type="button"
-                            onClick={handleAddAllLeads}
+                            onClick={handleAddAllStartups}
                             disabled={addingAll}
                             className="btn btn-secondary btn-sm"
                             style={{
@@ -398,8 +412,8 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                               </>
                             ) : (
                               <>
-                                <UserPlus style={{ width: "12px", height: "12px" }} />
-                                <span>Add All to Leads ({unaddedCount})</span>
+                                <Building2 style={{ width: "12px", height: "12px" }} />
+                                <span>Add All to EU Startups ({unaddedCount})</span>
                               </>
                             )}
                           </button>
@@ -417,7 +431,7 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                             fontWeight: 600,
                           }}
                         >
-                          <CheckCircle2 style={{ width: "13px", height: "13px" }} /> All Saved to Leads
+                          <CheckCircle2 style={{ width: "13px", height: "13px" }} /> All Saved to EU Startups
                         </span>
                       );
                     })()}
@@ -426,7 +440,7 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                     {result.extracted_leads.map((lead: any, i: number) => {
                       const key = getLeadKey(lead, i);
-                      const isAdded = !!addedMap[key] || !!lead.already_exists;
+                      const isAdded = !!addedMap[key];
                       const isAdding = !!addingMap[key];
 
                       return (
@@ -496,12 +510,12 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                                 }}
                               >
                                 <CheckCircle2 style={{ width: "13px", height: "13px" }} />
-                                <span>✓ In Leads</span>
+                                <span>✓ In EU Startups</span>
                               </span>
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => handleAddLead(lead, i)}
+                                onClick={() => handleAddStartup(lead, i)}
                                 disabled={isAdding || addingAll}
                                 className="btn btn-primary btn-sm"
                                 style={{
@@ -531,8 +545,8 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
                                   </>
                                 ) : (
                                   <>
-                                    <UserPlus style={{ width: "13px", height: "13px" }} />
-                                    <span>+ Add to Leads</span>
+                                    <Building2 style={{ width: "13px", height: "13px" }} />
+                                    <span>+ Add to EU Startups</span>
                                   </>
                                 )}
                               </button>
@@ -567,4 +581,3 @@ export function InstantAgentLab({ onToast, onRefreshStats }: InstantAgentLabProp
     </div>
   );
 }
-

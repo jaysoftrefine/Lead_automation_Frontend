@@ -84,6 +84,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  checkStartupsPresence: (leads: any[]) =>
+    fetchJson("/api/eu-startups/check-presence", {
+      method: "POST",
+      body: JSON.stringify({ leads }),
+    }),
+  addStartupFromAgent: (payload: any) =>
+    fetchJson("/api/eu-startups/add-from-agent", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  addBatchStartupsFromAgent: (payload: any) =>
+    fetchJson("/api/eu-startups/add-batch-from-agent", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   // EU Startups
   getEUStats: () => fetchJson("/api/eu-startups/stats"),

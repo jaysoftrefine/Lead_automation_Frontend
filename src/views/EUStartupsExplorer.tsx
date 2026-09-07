@@ -623,7 +623,8 @@ export function EUStartupsExplorer({ onToast }) {
                           <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>No contacts found</span>
                         ) : (
                           (s.people || []).map((p, pIdx) => {
-                            const isPersonal = p.linkedin && p.linkedin.includes("/in/");
+                            const linkedInUrl = p.linkedin || (p.name && s.company_name ? `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(p.name + " " + s.company_name)}` : null);
+                            const isPersonal = linkedInUrl && linkedInUrl.includes("/in/");
                             return (
                               <div
                                 key={pIdx}
@@ -650,9 +651,9 @@ export function EUStartupsExplorer({ onToast }) {
                                     ✉ {p.email}
                                   </div>
                                 )}
-                                {isPersonal && (
+                                {linkedInUrl && (
                                   <a
-                                    href={p.linkedin}
+                                    href={linkedInUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     style={{
@@ -660,12 +661,14 @@ export function EUStartupsExplorer({ onToast }) {
                                       alignItems: "center",
                                       gap: "3px",
                                       fontSize: "0.7rem",
-                                      color: "#818cf8",
-                                      marginTop: "2px",
+                                      color: isPersonal ? "#818cf8" : "var(--accent-cyan)",
+                                      marginTop: "3px",
+                                      textDecoration: "none",
+                                      fontWeight: 600,
                                     }}
                                   >
                                     <ExternalLink style={{ width: "10px", height: "10px" }} />
-                                    <span>Founder LinkedIn</span>
+                                    <span>{isPersonal ? "Founder LinkedIn" : "LinkedIn ↗"}</span>
                                   </a>
                                 )}
                               </div>
@@ -942,17 +945,22 @@ export function EUStartupsExplorer({ onToast }) {
                           )}
                         </div>
 
-                        {p.linkedin && (
-                          <a
-                            href={p.linkedin}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn btn-secondary btn-sm"
-                            style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none" }}
-                          >
-                            LinkedIn →
-                          </a>
-                        )}
+                        {(() => {
+                          const linkedInUrl = p.linkedin || (p.name && selectedStartup.company_name ? `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(p.name + " " + selectedStartup.company_name)}` : null);
+                          if (!linkedInUrl) return null;
+                          const isPersonal = linkedInUrl.includes("/in/");
+                          return (
+                            <a
+                              href={linkedInUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none" }}
+                            >
+                              {isPersonal ? "LinkedIn →" : "LinkedIn Search ↗"}
+                            </a>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
