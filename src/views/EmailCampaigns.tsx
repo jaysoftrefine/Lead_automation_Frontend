@@ -459,6 +459,33 @@ export function EmailCampaigns({
     }
   };
 
+  const cleanPreviewHtml = (raw: string) => {
+    if (!raw) return "";
+    let text = raw;
+
+    // Extract content inside <body>...</body> if full HTML doc was returned
+    const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) {
+      text = bodyMatch[1];
+    }
+
+    // Strip DOCTYPE and html/head tags if present
+    text = text
+      .replace(/<!DOCTYPE[^>]*>/gi, "")
+      .replace(/<html[^>]*>/gi, "")
+      .replace(/<\/html>/gi, "")
+      .replace(/<head[\s\S]*?<\/head>/gi, "");
+
+    // If string already contains HTML tags, return directly without converting newlines to <br/>
+    const hasHtml = /<[a-z][\s\S]*>/i.test(text);
+    if (hasHtml) {
+      return text.trim();
+    }
+
+    // Only for raw plain text, convert newlines to <br/>
+    return text.trim().replace(/\n/g, "<br/>");
+  };
+
   const loadRecipientPicker = async (target = "campaign") => {
     setPickerTarget(target);
     setShowRecipientPicker(true);
@@ -2239,15 +2266,47 @@ export function EmailCampaigns({
                 </div>
 
                 <div className="preview-container" style={{ flex: 1, marginTop: "1rem" }}>
-                  <div className="preview-subject-bar">
-                    <span className="preview-label">Subject:</span>
-                    <span className="preview-val">{previewSubject}</span>
+                  <div
+                    className="preview-subject-bar"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "8px 12px",
+                      background: "var(--bg-secondary, rgba(255,255,255,0.04))",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-subtle)",
+                      marginBottom: "0.85rem",
+                    }}
+                  >
+                    <span
+                      className="preview-label"
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Subject:
+                    </span>
+                    <span
+                      className="preview-val"
+                      style={{
+                        fontSize: "0.88rem",
+                        fontWeight: 600,
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      {previewSubject}
+                    </span>
                   </div>
 
                   {attachmentName && (
                     <div
                       style={{
-                        margin: "0.75rem 0",
+                        margin: "0.5rem 0 0.85rem 0",
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
@@ -2260,11 +2319,17 @@ export function EmailCampaigns({
                     </div>
                   )}
 
-                  <div className="preview-body-content">
+                  <div
+                    className="preview-body-content"
+                    style={{
+                      padding: "2px 0",
+                      lineHeight: 1.6,
+                    }}
+                  >
                     {previewBody ? (
                       <div
                         dangerouslySetInnerHTML={{
-                          __html: previewBody.replace(/\n/g, "<br/>"),
+                          __html: cleanPreviewHtml(previewBody),
                         }}
                       />
                     ) : (
