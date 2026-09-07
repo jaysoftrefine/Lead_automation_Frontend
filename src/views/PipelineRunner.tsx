@@ -14,8 +14,8 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
     glassdoor: false,
     zip_recruiter: false, */
   });
-  const [searchTerm, setSearchTerm] = useState("Software Engineer");
-  const [location, setLocation] = useState("United States");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [location, setLocation] = useState("");
   const [companySize, setCompanySize] = useState("small");
   const [resultsLimit, setResultsLimit] = useState<string | number>(15);
   const [isRunning, setIsRunning] = useState(false);
@@ -227,14 +227,24 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
             </div>
             <div className="form-group flex-1">
               <label htmlFor="location">Target Location</label>
-              <input
+              <select
                 id="location"
-                type="text"
-                className="eu-input"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. United States, Remote"
-              />
+              >
+                <option value="">— Select Location —</option>
+                <option value="Worldwide">Worldwide (Remote)</option>
+                <option value="United States">United States</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="Canada">Canada</option>
+                <option value="Australia">Australia</option>
+                <option value="India">India</option>
+                <option value="Germany">Germany</option>
+                <option value="France">France</option>
+                <option value="Netherlands">Netherlands</option>
+                <option value="Singapore">Singapore</option>
+                <option value="United Arab Emirates">United Arab Emirates</option>
+              </select>
             </div>
           </div>
 

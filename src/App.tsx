@@ -46,7 +46,7 @@ export function App() {
   const loadGlobalStats = async () => {
     try {
       const stats = await api.getStats();
-      if (stats?.total_leads !== undefined) setLeadsCount(stats.total_leads);
+      if (stats?.leads_count !== undefined) setLeadsCount(stats.leads_count);
     } catch (e) {}
 
     try {
@@ -60,10 +60,12 @@ export function App() {
     } catch (e) {}
   };
 
-  // Global stats polling commented out to avoid repeated network calls
-  // useEffect(() => {
-  //   loadGlobalStats();
-  // }, []);
+  // Load global stats on mount and refresh every 30s
+  useEffect(() => {
+    loadGlobalStats();
+    const interval = setInterval(loadGlobalStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="app-container">
