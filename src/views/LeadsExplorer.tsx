@@ -1,22 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { Database, Search, Filter, Download, ExternalLink, User, Mail, Globe, Eye, RefreshCw } from "lucide-react";
+import { Database, Search, Download, Globe, Eye, RefreshCw } from "lucide-react";
 import { api } from "../services/api";
 
-export function LeadsExplorer({ onToast }) {
-  const [leads, setLeads] = useState([]);
+export interface LeadsExplorerProps {
+  onToast: (message: string, type?: string) => void;
+}
+
+export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
+  const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [companySize, setCompanySize] = useState("");
-  const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedLead, setSelectedLead] = useState<any>(null);
 
   const loadLeads = async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params: Record<string, any> = {};
       if (companySize) params.company_size = companySize;
       const res = await api.getLeads(params);
       setLeads(res.leads || res.data || []);
-    } catch (e) {
+    } catch (e: any) {
       onToast(e.message, "error");
     } finally {
       setLoading(false);
@@ -33,11 +37,11 @@ export function LeadsExplorer({ onToast }) {
     const term = searchTerm.toLowerCase();
     const company = (l.company || "").toLowerCase();
     const location = (l.location || "").toLowerCase();
-    const roles = (l.contacts || []).map((c) => (c.name || "") + " " + (c.role || "")).join(" ").toLowerCase();
+    const roles = (l.contacts || []).map((c: any) => (c.name || "") + " " + (c.role || "")).join(" ").toLowerCase();
     return company.includes(term) || location.includes(term) || roles.includes(term);
   });
 
-  const exportData = (format) => {
+  const exportData = (format: "json" | "csv") => {
     if (filteredLeads.length === 0) {
       onToast("No leads to export", "error");
       return;
@@ -57,7 +61,7 @@ export function LeadsExplorer({ onToast }) {
         `"${(l.location || "").replace(/"/g, '""')}"`,
         `"${l.company_domain || ""}"`,
         `"${l.company_size || ""}"`,
-        `"${(l.contacts || []).map((c) => `${c.name || ""} (${c.role || ""}): ${c.email || ""}`).join("; ").replace(/"/g, '""')}"`,
+        `"${(l.contacts || []).map((c: any) => `${c.name || ""} (${c.role || ""}): ${c.email || ""}`).join("; ").replace(/"/g, '""')}"`,
         `"${l.confidence || ""}"`,
       ]);
       const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -147,7 +151,7 @@ export function LeadsExplorer({ onToast }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: "40px" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: "40px" }}>
                   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
                     <div className="spinner" />
                     <span>Loading database leads...</span>
@@ -156,7 +160,7 @@ export function LeadsExplorer({ onToast }) {
               </tr>
             ) : filteredLeads.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                   No leads found. Run the Pipeline Runner to scrape and discover B2B leads.
                 </td>
               </tr>
@@ -194,7 +198,7 @@ export function LeadsExplorer({ onToast }) {
                     {(lead.contacts || []).length === 0 ? (
                       <span style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>No contacts discovered</span>
                     ) : (
-                      (lead.contacts || []).map((c, cIdx) => (
+                      (lead.contacts || []).map((c: any, cIdx: number) => (
                         <div
                           key={cIdx}
                           style={{
@@ -282,7 +286,7 @@ export function LeadsExplorer({ onToast }) {
               {selectedLead.contacts && selectedLead.contacts.length > 0 && (
                 <div>
                   <h4 style={{ marginBottom: "0.4rem", color: "var(--accent-cyan)" }}>Discovered Contacts</h4>
-                  {selectedLead.contacts.map((c, i) => (
+                  {selectedLead.contacts.map((c: any, i: number) => (
                     <div
                       key={i}
                       style={{
@@ -341,7 +345,7 @@ export function LeadsExplorer({ onToast }) {
                 <div>
                   <h4 style={{ marginBottom: "0.4rem", color: "var(--accent-amber)" }}>Source Evidence Links</h4>
                   <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
-                    {selectedLead.sources.map((s, i) => (
+                    {selectedLead.sources.map((s: string, i: number) => (
                       <li key={i}>
                         <a href={s} target="_blank" rel="noreferrer" style={{ color: "var(--accent-cyan)" }}>
                           {s}

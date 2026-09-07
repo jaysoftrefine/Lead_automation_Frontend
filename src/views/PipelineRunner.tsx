@@ -2,8 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, Terminal, Sliders, Globe, Cpu, CheckCircle, AlertTriangle } from "lucide-react";
 import { api } from "../services/api";
 
-export function PipelineRunner({ onToast, onStatusChange }) {
-  const [platforms, setPlatforms] = useState({
+export interface PipelineRunnerProps {
+  onToast: (message: string, type?: string) => void;
+  onStatusChange?: (running: boolean) => void;
+}
+
+export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps) {
+  const [platforms, setPlatforms] = useState<Record<string, boolean>>({
     linkedin: true,
     indeed: true,
     glassdoor: false,
@@ -11,17 +16,17 @@ export function PipelineRunner({ onToast, onStatusChange }) {
   });
   const [searchTerm, setSearchTerm] = useState("Software Engineer");
   const [location, setLocation] = useState("United States");
-  const [resultsLimit, setResultsLimit] = useState(15);
+  const [resultsLimit, setResultsLimit] = useState<string | number>(15);
   const [isRunning, setIsRunning] = useState(false);
-  const [terminalLogs, setTerminalLogs] = useState([
-    "LeadPulse AI Autonomous Pipeline Ready.",
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    "HirePilot AI Autonomous Pipeline Ready.",
     "Configure search parameters on the left and click 'Start Autonomous Engine'.",
   ]);
   const [metrics, setMetrics] = useState({ scraped: 0, enriched: 0, status: "idle" });
 
-  const terminalEndRef = useRef(null);
+  const terminalEndRef = useRef<HTMLDivElement | null>(null);
 
-  const togglePlatform = (key) => {
+  const togglePlatform = (key: string) => {
     setPlatforms((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -48,7 +53,7 @@ export function PipelineRunner({ onToast, onStatusChange }) {
         sites: selectedPlatforms,
         search_term: searchTerm.trim(),
         location: location.trim(),
-        limit: parseInt(resultsLimit, 10) || 15,
+        limit: parseInt(String(resultsLimit), 10) || 15,
         company_size: "all",
         provider: "gemini",
         is_remote: true,
@@ -57,17 +62,17 @@ export function PipelineRunner({ onToast, onStatusChange }) {
       onToast(res.message || "Pipeline started successfully!", "success");
       // Trigger status check immediately
       setTimeout(() => {
-        api.getPipelineStatus().then((statusRes) => {
+        api.getPipelineStatus().then((statusRes: any) => {
           const d = statusRes?.data || statusRes;
           if (d?.logs) {
-            const formatted = d.logs.map((l) =>
+            const formatted = d.logs.map((l: any) =>
               typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
             );
             setTerminalLogs(formatted);
           }
         });
       }, 200);
-    } catch (e) {
+    } catch (e: any) {
       setIsRunning(false);
       if (onStatusChange) onStatusChange(false);
       onToast(e.message, "error");
@@ -80,14 +85,14 @@ export function PipelineRunner({ onToast, onStatusChange }) {
       setIsRunning(false);
       if (onStatusChange) onStatusChange(false);
       onToast("Pipeline cancellation requested.", "success");
-    } catch (e) {
+    } catch (e: any) {
       onToast(e.message, "error");
     }
   };
 
   // Poll status while running
   useEffect(() => {
-    let interval = null;
+    let interval: any = null;
     const checkStatus = async () => {
       try {
         const res = await api.getPipelineStatus();
@@ -103,7 +108,7 @@ export function PipelineRunner({ onToast, onStatusChange }) {
           });
 
           if (d.logs && Array.isArray(d.logs) && d.logs.length > 0) {
-            const formatted = d.logs.map((l) =>
+            const formatted = d.logs.map((l: any) =>
               typeof l === "string" ? l : `[${l.time || ""}] ${l.message || ""}`
             );
             setTerminalLogs(formatted);
@@ -280,7 +285,7 @@ export function PipelineRunner({ onToast, onStatusChange }) {
               <div className="terminal-dot yellow" />
               <div className="terminal-dot green" />
             </div>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>leadpulse-agent-stdout</span>
+            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>hirepilot-agent-stdout</span>
           </div>
           <div className="terminal-body">
             {terminalLogs.map((line, idx) => (

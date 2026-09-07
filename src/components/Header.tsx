@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Zap, Clock, Sun, Moon } from "lucide-react";
 
-export function Header({ stats, isPipelineRunning, theme, onToggleTheme }) {
+export interface HeaderProps {
+  stats?: any;
+  isPipelineRunning?: boolean;
+  theme: string;
+  onToggleTheme: () => void;
+  onOpenSmtp?: () => void;
+}
+
+export function Header({ isPipelineRunning, theme, onToggleTheme }: HeaderProps) {
   const [timeStr, setTimeStr] = useState("");
   const [dateStr, setDateStr] = useState("");
 
@@ -49,7 +57,7 @@ export function Header({ stats, isPipelineRunning, theme, onToggleTheme }) {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <h1 style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
-                LeadPulse <span style={{ color: "var(--accent-cyan)" }}>AI</span>
+                HirePilot <span style={{ color: "var(--accent-cyan)" }}>AI</span>
               </h1>
               <span className="platform-badge accent" style={{ fontSize: "0.68rem" }}>
                 B2B Lead Engine

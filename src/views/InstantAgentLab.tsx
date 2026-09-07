@@ -1,13 +1,17 @@
 import React, { useState } from "react";
-import { Bot, Sparkles, Send, Globe, FileText, CheckCircle2, UserCheck } from "lucide-react";
+import { Bot, Sparkles, FileText, CheckCircle2 } from "lucide-react";
 import { api } from "../services/api";
 
-export function InstantAgentLab({ onToast }) {
+export interface InstantAgentLabProps {
+  onToast: (message: string, type?: string) => void;
+}
+
+export function InstantAgentLab({ onToast }: InstantAgentLabProps) {
   const [prompt, setPrompt] = useState(
     "Research fast-growing European B2B SaaS startups in AI & automation and extract their founders with direct emails."
   );
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<any>(null);
 
   const handleRun = async () => {
     if (!prompt.trim()) {
@@ -21,7 +25,7 @@ export function InstantAgentLab({ onToast }) {
       const res = await api.runAgentResearch({ prompt: prompt.trim() });
       setResult(res);
       onToast("Agent research complete!", "success");
-    } catch (e) {
+    } catch (e: any) {
       onToast(e.message, "error");
     } finally {
       setLoading(false);
@@ -49,7 +53,7 @@ export function InstantAgentLab({ onToast }) {
           <label htmlFor="agent-prompt">Research Objective &amp; Instructions</label>
           <textarea
             id="agent-prompt"
-            rows="7"
+            rows={7}
             className="eu-input"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -134,7 +138,7 @@ export function InstantAgentLab({ onToast }) {
                 <div>
                   <h4 style={{ color: "var(--accent-cyan)", marginBottom: "0.5rem" }}>Extracted Key Contacts</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    {result.extracted_leads.map((lead, i) => (
+                    {result.extracted_leads.map((lead: any, i: number) => (
                       <div
                         key={i}
                         style={{
@@ -164,7 +168,7 @@ export function InstantAgentLab({ onToast }) {
                 <div>
                   <h4 style={{ color: "var(--accent-amber)", marginBottom: "0.4rem" }}>Referenced Sources</h4>
                   <ul style={{ paddingLeft: "20px", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                    {result.sources.map((s, i) => (
+                    {result.sources.map((s: string, i: number) => (
                       <li key={i} style={{ marginBottom: "3px" }}>
                         <a href={s} target="_blank" rel="noreferrer" style={{ color: "var(--accent-cyan)" }}>
                           {s}

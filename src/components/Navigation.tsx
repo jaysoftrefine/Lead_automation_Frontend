@@ -1,7 +1,23 @@
 import React from "react";
 import { PlayCircle, Database, Bot, Building2, Mail } from "lucide-react";
 
-export function Navigation({ activeTab, setActiveTab, leadsCount, euCount, templatesCount, isRunning }) {
+export interface NavigationProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  leadsCount?: number;
+  euCount?: number;
+  templatesCount?: number;
+  isRunning?: boolean;
+}
+
+export function Navigation({
+  activeTab,
+  setActiveTab,
+  leadsCount,
+  euCount,
+  templatesCount,
+  isRunning,
+}: NavigationProps) {
   const tabs = [
     {
       id: "pipeline",
@@ -15,23 +31,28 @@ export function Navigation({ activeTab, setActiveTab, leadsCount, euCount, templ
       label: "Leads Explorer",
       icon: Database,
       badge: leadsCount !== undefined ? leadsCount : null,
+      badgeType: null,
     },
     {
       id: "instant-research",
       label: "Instant Agent Lab",
       icon: Bot,
+      badge: null,
+      badgeType: null,
     },
     {
       id: "eu-startups",
       label: "EU Startups Explorer",
       icon: Building2,
       badge: euCount !== undefined ? euCount : null,
+      badgeType: null,
     },
     {
       id: "email",
       label: "Email Campaigns",
       icon: Mail,
       badge: templatesCount !== undefined ? templatesCount : null,
+      badgeType: null,
       badgeGradient: true,
     },
   ];

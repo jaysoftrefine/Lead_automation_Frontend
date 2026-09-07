@@ -8,28 +8,34 @@ import { EUStartupsExplorer } from "./views/EUStartupsExplorer";
 import { EmailCampaigns } from "./views/EmailCampaigns";
 import { api } from "./services/api";
 
+export interface ToastItem {
+  id: number;
+  message: string;
+  type: string;
+}
+
 export function App() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("leadpulse_theme") || "light";
+    return localStorage.getItem("hirepilot_theme") || localStorage.getItem("leadpulse_theme") || "light";
   });
   const [activeTab, setActiveTab] = useState("pipeline");
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [leadsCount, setLeadsCount] = useState(0);
   const [euCount, setEuCount] = useState(0);
   const [templatesCount, setTemplatesCount] = useState(0);
-  const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [showSmtpModal, setShowSmtpModal] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("leadpulse_theme", theme);
+    localStorage.setItem("hirepilot_theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
 
-  const showToast = (message, type = "info") => {
+  const showToast = (message: string, type: string = "info") => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -40,17 +46,17 @@ export function App() {
   const loadGlobalStats = async () => {
     try {
       const stats = await api.getStats();
-      if (stats.total_leads !== undefined) setLeadsCount(stats.total_leads);
+      if (stats?.total_leads !== undefined) setLeadsCount(stats.total_leads);
     } catch (e) {}
 
     try {
       const euStats = await api.getEUStats();
-      if (euStats.total !== undefined) setEuCount(euStats.total);
+      if (euStats?.total !== undefined) setEuCount(euStats.total);
     } catch (e) {}
 
     try {
       const tpls = await api.getTemplates();
-      if (tpls.data) setTemplatesCount(tpls.data.length);
+      if (tpls?.data) setTemplatesCount(tpls.data.length);
     } catch (e) {}
   };
 
@@ -97,7 +103,7 @@ export function App() {
         {activeTab === "email" && (
           <EmailCampaigns
             onToast={showToast}
-            onUpdateBadge={(cnt) => setTemplatesCount(cnt)}
+            onUpdateBadge={(cnt: number) => setTemplatesCount(cnt)}
             showSmtpModalDirect={showSmtpModal}
             onCloseSmtpModalDirect={() => setShowSmtpModal(false)}
           />

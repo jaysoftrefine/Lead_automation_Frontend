@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useRef } from "react";
 import {
   FileText,
@@ -152,7 +153,7 @@ export function EmailCampaigns({
   const [smtpPort, setSmtpPort] = useState(587);
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPass, setSmtpPass] = useState("");
-  const [smtpFromName, setSmtpFromName] = useState("LeadPulse AI");
+  const [smtpFromName, setSmtpFromName] = useState("HirePilot AI");
   const [smtpUseSSL, setSmtpUseSSL] = useState(false);
   const [smtpUseTLS, setSmtpUseTLS] = useState(true);
   const [smtpTestResult, setSmtpTestResult] = useState(null);
@@ -218,7 +219,7 @@ export function EmailCampaigns({
       setSmtpPort(cfg.smtp_port || 587);
       setSmtpUser(cfg.smtp_user || "");
       setSmtpPass("");
-      setSmtpFromName(cfg.from_name || "LeadPulse AI");
+      setSmtpFromName(cfg.from_name || "HirePilot AI");
       setSmtpUseSSL(!!cfg.use_ssl);
       setSmtpUseTLS(!!cfg.use_tls);
     } catch (e) {}
@@ -1326,7 +1327,7 @@ export function EmailCampaigns({
         smtp_port: parseInt(smtpPort, 10) || 587,
         smtp_user: smtpUser.trim(),
         smtp_pass: smtpPass,
-        from_name: smtpFromName.trim() || "LeadPulse AI",
+        from_name: smtpFromName.trim() || "HirePilot AI",
         use_ssl: smtpUseSSL,
         use_tls: smtpUseTLS,
       });
@@ -1347,7 +1348,7 @@ export function EmailCampaigns({
         smtp_port: parseInt(smtpPort, 10) || 587,
         smtp_user: smtpUser.trim(),
         smtp_pass: smtpPass,
-        from_name: smtpFromName.trim() || "LeadPulse AI",
+        from_name: smtpFromName.trim() || "HirePilot AI",
         use_ssl: smtpUseSSL,
         use_tls: smtpUseTLS,
       });
@@ -2936,7 +2937,7 @@ export function EmailCampaigns({
                                       fontWeight: 600,
                                     }}
                                   >
-                                    {c.source === "sqlite" ? "EU Startups" : "Job Leads"}
+                                    {c.source === "sqlite" ? "EU Startups" : "LinkedIn Leads"}
                                   </span>
                                   {c.country && (
                                     <span
@@ -6443,7 +6444,7 @@ export function EmailCampaigns({
                 <input
                   type="text"
                   className="eu-input"
-                  placeholder="LeadPulse AI"
+                  placeholder="HirePilot AI"
                   value={smtpFromName}
                   onChange={(e) => setSmtpFromName(e.target.value)}
                 />

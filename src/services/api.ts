@@ -1,6 +1,6 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-export async function fetchJson(url, options = {}) {
+export async function fetchJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
@@ -24,7 +24,7 @@ export const api = {
   getStats: () => fetchJson("/api/stats"),
 
   // Pipeline
-  startPipeline: (payload) =>
+  startPipeline: (payload: any) =>
     fetchJson("/api/pipeline/start", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -33,13 +33,13 @@ export const api = {
   stopPipeline: () => fetchJson("/api/pipeline/stop", { method: "POST" }),
 
   // Leads
-  getLeads: (params = {}) => {
+  getLeads: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/leads${q ? `?${q}` : ""}`);
   },
 
   // Instant Agent Lab
-  runAgentResearch: (payload) =>
+  runAgentResearch: (payload: any) =>
     fetchJson("/api/instant-research", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -48,17 +48,17 @@ export const api = {
   // EU Startups
   getEUStats: () => fetchJson("/api/eu-startups/stats"),
   getEUOptions: () => fetchJson("/api/eu-startups/options"),
-  getEUStartups: (params = {}) => {
+  getEUStartups: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/eu-startups/startups${q ? `?${q}` : ""}`);
   },
-  discoverEUStartups: (params = {}) => {
+  discoverEUStartups: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/eu-startups/discover${q ? `?${q}` : ""}`, {
       method: "POST",
     });
   },
-  enrichEUStartup: (startupId) =>
+  enrichEUStartup: (startupId: string | number) =>
     fetchJson(`/api/eu-startups/startups/${startupId}/enrich`, {
       method: "POST",
     }),
@@ -66,32 +66,32 @@ export const api = {
   // Email Marketing & Campaigns
   getEmailVariables: () => fetchJson("/api/email/templates/variables"),
   getTemplates: () => fetchJson("/api/email/templates"),
-  getTemplate: (id) => fetchJson(`/api/email/templates/${id}`),
-  createTemplate: (payload) =>
+  getTemplate: (id: string | number) => fetchJson(`/api/email/templates/${id}`),
+  createTemplate: (payload: any) =>
     fetchJson("/api/email/templates", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateTemplate: (id, payload) =>
+  updateTemplate: (id: string | number, payload: any) =>
     fetchJson(`/api/email/templates/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteTemplate: (id) =>
+  deleteTemplate: (id: string | number) =>
     fetchJson(`/api/email/templates/${id}`, { method: "DELETE" }),
-  previewTemplate: (id) =>
+  previewTemplate: (id: string | number) =>
     fetchJson(`/api/email/templates/${id}/preview`, { method: "POST" }),
-  previewRawTemplate: (payload) =>
+  previewRawTemplate: (payload: any) =>
     fetchJson("/api/email/templates/preview-raw", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
   // PDF Attachment Upload
-  uploadAttachment: async (file) => {
+  uploadAttachment: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    let res;
+    let res: Response;
     try {
       res = await fetch("/api/email/attachments/upload", {
         method: "POST",
@@ -113,7 +113,7 @@ export const api = {
 
   getAttachments: () => fetchJson("/api/email/attachments"),
 
-  sendTestEmail: (payload) =>
+  sendTestEmail: (payload: any) =>
     fetchJson("/api/email/send-test", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -121,12 +121,12 @@ export const api = {
 
   // SMTP Configuration
   getSMTPConfig: () => fetchJson("/api/email/smtp/config"),
-  saveSMTPConfig: (payload) =>
+  saveSMTPConfig: (payload: any) =>
     fetchJson("/api/email/smtp/config", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  testSMTP: (payload) =>
+  testSMTP: (payload?: any) =>
     fetchJson("/api/email/smtp/test", {
       method: "POST",
       body: payload ? JSON.stringify(payload) : undefined,
@@ -134,86 +134,86 @@ export const api = {
 
   // Bulk Campaigns
   getCampaigns: () => fetchJson("/api/email/campaigns"),
-  createCampaign: (payload) =>
+  createCampaign: (payload: any) =>
     fetchJson("/api/email/campaigns", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateCampaign: (id, payload) =>
+  updateCampaign: (id: string | number, payload: any) =>
     fetchJson(`/api/email/campaigns/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  launchCampaignById: (id) =>
+  launchCampaignById: (id: string | number) =>
     fetchJson(`/api/email/campaigns/${id}/launch`, {
       method: "POST",
     }),
-  deleteCampaign: (id) =>
+  deleteCampaign: (id: string | number) =>
     fetchJson(`/api/email/campaigns/${id}`, {
       method: "DELETE",
     }),
-  previewGeneratedCampaign: (payload) =>
+  previewGeneratedCampaign: (payload: any) =>
     fetchJson("/api/email/campaigns/preview-generated", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  estimateRecipients: (params = {}) => {
+  estimateRecipients: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/campaigns/estimate${q ? `?${q}` : ""}`);
   },
-  getCampaign: (id) => fetchJson(`/api/email/campaigns/${id}`),
-  getCampaignLogs: (id, params = {}) => {
+  getCampaign: (id: string | number) => fetchJson(`/api/email/campaigns/${id}`),
+  getCampaignLogs: (id: string | number, params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/campaigns/${id}/logs${q ? `?${q}` : ""}`);
   },
 
   // Audiences (Recipient Lists)
   getAudiences: () => fetchJson("/api/email/audiences"),
-  createAudience: (payload) =>
+  createAudience: (payload: any) =>
     fetchJson("/api/email/audiences", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  getAudience: (id) => fetchJson(`/api/email/audiences/${id}`),
-  updateAudience: (id, payload) =>
+  getAudience: (id: string | number) => fetchJson(`/api/email/audiences/${id}`),
+  updateAudience: (id: string | number, payload: any) =>
     fetchJson(`/api/email/audiences/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteAudience: (id) =>
+  deleteAudience: (id: string | number) =>
     fetchJson(`/api/email/audiences/${id}`, {
       method: "DELETE",
     }),
-  browseRecipients: (params = {}) => {
+  browseRecipients: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/recipients/browse${q ? `?${q}` : ""}`);
   },
 
   // 1-by-1 Review Queue
-  generateQueue: (payload) =>
+  generateQueue: (payload: any) =>
     fetchJson("/api/email/queue/generate", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  getQueue: (params = {}) => {
+  getQueue: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/queue${q ? `?${q}` : ""}`);
   },
-  getQueueItem: (id) => fetchJson(`/api/email/queue/${id}`),
-  updateQueueItem: (id, payload) =>
+  getQueueItem: (id: string | number) => fetchJson(`/api/email/queue/${id}`),
+  updateQueueItem: (id: string | number, payload: any) =>
     fetchJson(`/api/email/queue/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  regenerateQueueItemAI: (id) =>
+  regenerateQueueItemAI: (id: string | number) =>
     fetchJson(`/api/email/queue/${id}/regenerate-ai`, {
       method: "POST",
     }),
-  sendQueueItem: (id) =>
+  sendQueueItem: (id: string | number) =>
     fetchJson(`/api/email/queue/${id}/send`, {
       method: "POST",
     }),
-  deleteQueueItem: (id) =>
+  deleteQueueItem: (id: string | number) =>
     fetchJson(`/api/email/queue/${id}`, {
       method: "DELETE",
     }),
