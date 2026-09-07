@@ -1,5 +1,7 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import {
   FileText,
   Send,
@@ -161,6 +163,22 @@ export function EmailCampaigns({
 
   const fileInputRef = useRef(null);
   const bodyTextareaRef = useRef(null);
+  const quillRef = useRef(null);
+  const [editorMode, setEditorMode] = useState("visual"); // 'visual' | 'html'
+
+  const quillModules = useMemo(
+    () => ({
+      toolbar: [
+        [{ header: [1, 2, 3, false] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ color: [] }, { background: [] }],
+        [{ list: "ordered" }, { list: "bullet" }],
+        [{ align: [] }],
+        ["link", "clean"],
+      ],
+    }),
+    []
+  );
 
   // Sync external SMTP modal trigger
   useEffect(() => {
@@ -279,20 +297,36 @@ export function EmailCampaigns({
 
   // Insert variable into template body or subject
   const insertVariable = (variable) => {
-    const textarea = bodyTextareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const val = tplBody;
-    const next = val.slice(0, start) + variable + val.slice(end);
-    setTplBody(next);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        start + variable.length,
-        start + variable.length,
-      );
-    }, 0);
+    if (editorMode === "html") {
+      const textarea = bodyTextareaRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = tplBody;
+      const next = val.slice(0, start) + variable + val.slice(end);
+      setTplBody(next);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(
+          start + variable.length,
+          start + variable.length,
+        );
+      }, 0);
+      return;
+    }
+
+    // Visual WYSIWYG Mode (Quill)
+    const editor = quillRef.current?.getEditor
+      ? quillRef.current.getEditor()
+      : quillRef.current;
+    if (editor) {
+      const range = editor.getSelection();
+      const index = range ? range.index : Math.max(0, editor.getLength() - 1);
+      editor.insertText(index, variable, "user");
+      editor.setSelection(index + variable.length);
+    } else {
+      setTplBody((prev) => (prev ? prev + " " + variable : variable));
+    }
   };
 
   // PDF Attachment Upload
@@ -2086,16 +2120,81 @@ export function EmailCampaigns({
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="tpl-body">Email Body (HTML supported)</label>
-                    <textarea
-                      id="tpl-body"
-                      ref={bodyTextareaRef}
-                      rows="10"
-                      className="eu-input"
-                      placeholder="Hi {{name}},&#10;&#10;I came across {{company_name}} and wanted to reach out regarding our B2B solutions.&#10;&#10;Best regards,"
-                      value={tplBody}
-                      onChange={(e) => setTplBody(e.target.value)}
-                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <label htmlFor="tpl-body" style={{ margin: 0, fontWeight: 600, fontSize: "0.88rem" }}>
+                          Email Body
+                        </label>
+                        <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", background: "rgba(6,182,212,0.12)", padding: "2px 8px", borderRadius: "6px", fontWeight: 500 }}>
+                          HTML Output
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "var(--bg-input)", padding: "2px 3px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditorMode("visual")}
+                          style={{
+                            padding: "4px 10px",
+                            fontSize: "0.74rem",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: editorMode === "visual" ? "var(--accent-cyan)" : "transparent",
+                            color: editorMode === "visual" ? "#fff" : "var(--text-muted)",
+                            fontWeight: editorMode === "visual" ? 600 : 400,
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          Visual Editor (Rich Text)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditorMode("html")}
+                          style={{
+                            padding: "4px 10px",
+                            fontSize: "0.74rem",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: editorMode === "html" ? "var(--accent-cyan)" : "transparent",
+                            color: editorMode === "html" ? "#fff" : "var(--text-muted)",
+                            fontWeight: editorMode === "html" ? 600 : 400,
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          &lt;&gt; Raw HTML
+                        </button>
+                      </div>
+                    </div>
+
+                    {editorMode === "visual" ? (
+                      <div className="hp-quill-wrapper">
+                        <ReactQuill
+                          ref={quillRef}
+                          theme="snow"
+                          value={tplBody}
+                          onChange={(content) => setTplBody(content)}
+                          modules={quillModules}
+                          placeholder="Type your email message visually... No raw HTML tags needed! Dynamic variables like {{name}} will be preserved."
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        id="tpl-body"
+                        ref={bodyTextareaRef}
+                        className="eu-input"
+                        placeholder="Hi {{name}},&#10;&#10;I came across {{company_name}} and wanted to reach out regarding our B2B solutions.&#10;&#10;Best regards,"
+                        value={tplBody}
+                        onChange={(e) => setTplBody(e.target.value)}
+                        style={{
+                          minHeight: "420px",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                          fontSize: "0.84rem",
+                          lineHeight: "1.55",
+                          resize: "vertical",
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
