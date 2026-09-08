@@ -179,12 +179,36 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  // SMTP Configuration
+  // SMTP Configuration & Multi-Account
   getSMTPConfig: () => fetchJson("/api/email/smtp/config"),
   saveSMTPConfig: (payload: any) =>
     fetchJson("/api/email/smtp/config", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  getSMTPAccounts: () => fetchJson<{ status: string; data: any[] }>("/api/email/smtp/accounts"),
+  getSMTPAccount: (id: string | number) => fetchJson(`/api/email/smtp/accounts/${id}`),
+  createSMTPAccount: (payload: any) =>
+    fetchJson("/api/email/smtp/accounts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateSMTPAccount: (id: string | number, payload: any) =>
+    fetchJson(`/api/email/smtp/accounts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteSMTPAccount: (id: string | number) =>
+    fetchJson(`/api/email/smtp/accounts/${id}`, {
+      method: "DELETE",
+    }),
+  setDefaultSMTPAccount: (id: string | number) =>
+    fetchJson(`/api/email/smtp/accounts/${id}/default`, {
+      method: "POST",
+    }),
+  testSMTPAccount: (id: string | number) =>
+    fetchJson(`/api/email/smtp/accounts/${id}/test`, {
+      method: "POST",
     }),
   testSMTP: (payload?: any) =>
     fetchJson("/api/email/smtp/test", {
@@ -269,9 +293,10 @@ export const api = {
     fetchJson(`/api/email/queue/${id}/regenerate-ai`, {
       method: "POST",
     }),
-  sendQueueItem: (id: string | number) =>
+  sendQueueItem: (id: string | number, payload?: { smtp_account_id?: string }) =>
     fetchJson(`/api/email/queue/${id}/send`, {
       method: "POST",
+      body: payload ? JSON.stringify(payload) : undefined,
     }),
   deleteQueueItem: (id: string | number) =>
     fetchJson(`/api/email/queue/${id}`, {
