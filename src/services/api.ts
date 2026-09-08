@@ -187,6 +187,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getSMTPAccounts: () => fetchJson<{ status: string; data: any[] }>("/api/email/smtp/accounts"),
+  getSmtpAccounts: () => fetchJson<{ status: string; data: any[] }>("/api/email/smtp/accounts"),
   getSMTPAccount: (id: string | number) => fetchJson(`/api/email/smtp/accounts/${id}`),
   createSMTPAccount: (payload: any) =>
     fetchJson("/api/email/smtp/accounts", {

@@ -1,0 +1,179 @@
+import React from "react";
+import { Clock, RefreshCw, Edit3, Rocket, List, Trash2 } from "lucide-react";
+import type { Campaign } from "../../../types/email";
+
+export interface CampaignHistoryPanelProps {
+  campaigns: Campaign[];
+  onRefresh: () => void;
+  onEditCampaign: (campaign: Campaign) => void;
+  onLaunchDraft: (campaign: Campaign) => void;
+  onOpenLogs: (campaign: Campaign) => void;
+  onDeleteCampaign: (id: string) => void;
+}
+
+export function CampaignHistoryPanel({
+  campaigns,
+  onRefresh,
+  onEditCampaign,
+  onLaunchDraft,
+  onOpenLogs,
+  onDeleteCampaign,
+}: CampaignHistoryPanelProps) {
+  return (
+    <div className="glass-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <Clock
+            style={{
+              width: "18px",
+              height: "18px",
+              color: "var(--accent-violet)",
+            }}
+          />
+          <h2>Historical Campaigns ({campaigns.length})</h2>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="btn-icon-ghost"
+          title="Refresh history"
+        >
+          <RefreshCw style={{ width: "14px", height: "14px" }} />
+        </button>
+      </div>
+
+      <div className="eu-table-wrapper" style={{ marginTop: "1rem" }}>
+        <table className="eu-startups-table">
+          <thead>
+            <tr>
+              <th>Campaign Name</th>
+              <th>Template</th>
+              <th>Status</th>
+              <th>Sent</th>
+              <th>Failed</th>
+              <th>Total</th>
+              <th>Launched</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  style={{
+                    textAlign: "center",
+                    padding: "40px",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  No campaigns found. Launch a campaign from the Send Campaign tab.
+                </td>
+              </tr>
+            ) : (
+              campaigns.map((c: any) => (
+                <tr key={c.id}>
+                  <td>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      {c.name}
+                    </div>
+                  </td>
+                  <td style={{ color: "var(--text-muted)" }}>
+                    {c.template_name || "—"}
+                  </td>
+                  <td>
+                    <span
+                      className={`camp-stat-pill ${
+                        c.status === "completed"
+                          ? "success"
+                          : c.status === "running"
+                          ? "info"
+                          : c.status === "failed"
+                          ? "error"
+                          : ""
+                      }`}
+                      style={{
+                        fontSize: "0.72rem",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {c.status}
+                    </span>
+                  </td>
+                  <td style={{ color: "#10b981", fontWeight: 700 }}>
+                    {c.sent_count || c.sent || 0}
+                  </td>
+                  <td style={{ color: "#fb7185", fontWeight: 700 }}>
+                    {c.failed_count || 0}
+                  </td>
+                  <td>{c.total_recipients || c.total || 0}</td>
+                  <td
+                    style={{
+                      fontSize: "0.76rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    {c.created_at
+                      ? new Date(c.created_at).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <button
+                        onClick={() => onEditCampaign(c)}
+                        className="btn btn-secondary btn-sm"
+                        title="Edit campaign settings"
+                      >
+                        <Edit3 style={{ width: "12px", height: "12px" }} /> Edit
+                      </button>
+                      {c.status === "draft" && (
+                        <button
+                          onClick={() => onLaunchDraft(c)}
+                          className="btn btn-primary btn-sm"
+                          title="Launch this draft campaign"
+                          style={{
+                            background: "var(--accent-primary)",
+                            color: "#fff",
+                          }}
+                        >
+                          <Rocket style={{ width: "12px", height: "12px" }} /> Launch
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onOpenLogs(c)}
+                        className="btn btn-secondary btn-sm"
+                        title="View delivery logs"
+                      >
+                        <List style={{ width: "12px", height: "12px" }} /> Logs
+                      </button>
+                      <button
+                        onClick={() => onDeleteCampaign(c.id)}
+                        className="btn-icon-ghost"
+                        style={{ color: "#fb7185", padding: "4px" }}
+                        title="Delete campaign"
+                      >
+                        <Trash2 style={{ width: "13px", height: "13px" }} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default CampaignHistoryPanel;
