@@ -17,6 +17,7 @@ import {
 import { api } from "../../../services/api";
 import type { Audience } from "../../../types/email";
 import { Pagination } from "../../common/Pagination";
+import { ManualEntryModal } from "../modals/ManualEntryModal";
 
 function formatContactDate(dateStr?: string | null): string {
   if (!dateStr) return "—";
@@ -85,6 +86,28 @@ export function AudiencesPanel({
   const [audManualEmails, setAudManualEmails] = useState("");
   const [audSelectedContacts, setAudSelectedContacts] = useState<any[]>([]);
   const [savingAudience, setSavingAudience] = useState(false);
+
+  // Manual Entry Modal (Job Lead vs European Startup)
+  const [showManualEntryModal, setShowManualEntryModal] = useState(false);
+
+  const handleManualEntrySuccess = (item: {
+    type: "job" | "startup";
+    name?: string;
+    email?: string;
+    company: string;
+  }) => {
+    if (item.email) {
+      const formatted = item.name
+        ? `${item.name}, ${item.company}, ${item.email}`
+        : `${item.company}, ${item.email}`;
+      setAudManualEmails((prev) =>
+        prev.trim() ? `${prev.trim()}\n${formatted}` : formatted
+      );
+    }
+    if (audSources.mongo || audSources.sqlite) {
+      loadBrowseContacts(audBrowsePage);
+    }
+  };
 
   // Lead Browser table states
   const [audBrowseContacts, setAudBrowseContacts] = useState<any[]>([]);
@@ -822,12 +845,16 @@ export function AudiencesPanel({
                   <input
                     type="checkbox"
                     checked={audSources.manual}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const checked = e.target.checked;
                       setAudSources((s) => ({
                         ...s,
-                        manual: e.target.checked,
-                      }))
-                    }
+                        manual: checked,
+                      }));
+                      if (checked) {
+                        setShowManualEntryModal(true);
+                      }
+                    }}
                   />
                   <span className="chip-content" style={{ fontWeight: 500 }}>
                     Manual / Direct Contacts
@@ -1126,9 +1153,44 @@ export function AudiencesPanel({
             {/* Manual contacts list */}
             {audSources.manual && (
               <div className="form-group">
-                <label style={{ fontWeight: 600, fontSize: "0.82rem" }}>
-                  Manual Contacts
-                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "6px",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                      margin: 0,
+                    }}
+                  >
+                    Manual Contacts
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualEntryModal(true)}
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      padding: "3px 8px",
+                      fontSize: "0.72rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      color: "#ea580c",
+                      borderColor: "rgba(234, 88, 12, 0.3)",
+                      background: "rgba(234, 88, 12, 0.08)",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Plus style={{ width: "12px", height: "12px" }} />
+                    <span>+ Add via Manual Entry (Job or Startup)</span>
+                  </button>
+                </div>
                 <textarea
                   className="eu-textarea"
                   rows={3}
@@ -2130,6 +2192,14 @@ export function AudiencesPanel({
           )}
         </div>
       )}
+
+      {/* Manual Entry Modal */}
+      <ManualEntryModal
+        isOpen={showManualEntryModal}
+        onClose={() => setShowManualEntryModal(false)}
+        onSuccess={handleManualEntrySuccess}
+        onToast={onToast}
+      />
     </div>
   );
 }
