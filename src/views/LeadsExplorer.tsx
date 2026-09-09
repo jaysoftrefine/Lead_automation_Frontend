@@ -23,6 +23,10 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [companySize, setCompanySize] = useState("");
+  const [datePreset, setDatePreset] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [dateField, setDateField] = useState("any");
   const [activeLeadType, setActiveLeadType] = useState<"all" | "company" | "personal" | "others">("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -138,6 +142,16 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       if (targetType && targetType !== "all") params.lead_type = targetType;
       if (targetSearch.trim()) params.search = targetSearch.trim();
 
+      if (datePreset && datePreset !== "all" && datePreset !== "custom") {
+        if (datePreset === "today") params.hours_old = 24;
+        else if (datePreset === "7d") params.hours_old = 168;
+        else if (datePreset === "30d") params.hours_old = 720;
+        else if (datePreset === "90d") params.hours_old = 2160;
+      }
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      if (dateField && dateField !== "any") params.date_field = dateField;
+
       const res = await api.getLeads(params);
       setLeads(res.leads || res.data || []);
       setTotalPages(res.total_pages || 1);
@@ -157,7 +171,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       loadLeads(1, activeLeadType, companySize, searchTerm);
     }, 250);
     return () => clearTimeout(timer);
-  }, [searchTerm, companySize, activeLeadType]);
+  }, [searchTerm, companySize, activeLeadType, datePreset, dateFrom, dateTo, dateField]);
 
   const handleLeadTypeChange = async (job_url: string, newType: string) => {
     // Optimistically update local state
@@ -256,6 +270,50 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
             <option value="medium">Medium (51-500)</option>
             <option value="large">Large (500+)</option>
           </select>
+
+          {/* Date Filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <select
+              value={datePreset}
+              onChange={(e) => {
+                setDatePreset(e.target.value);
+                if (e.target.value !== "custom") {
+                  setDateFrom("");
+                  setDateTo("");
+                }
+              }}
+              style={{ width: "auto" }}
+            >
+              <option value="all">📅 All Dates</option>
+              <option value="today">Past 24 Hours</option>
+              <option value="7d">Past 7 Days</option>
+              <option value="30d">Past 30 Days</option>
+              <option value="90d">Past 90 Days</option>
+              <option value="custom">Custom Date Range...</option>
+            </select>
+
+            {datePreset === "custom" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <input
+                  type="date"
+                  className="eu-input"
+                  style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  placeholder="From"
+                />
+                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>to</span>
+                <input
+                  type="date"
+                  className="eu-input"
+                  style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  placeholder="To"
+                />
+              </div>
+            )}
+          </div>
 
           {/* Refresh */}
           <button onClick={() => loadLeads(page)} className="btn-icon-ghost" title="Refresh Leads">

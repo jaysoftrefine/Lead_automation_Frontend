@@ -220,13 +220,20 @@ export function EmailCampaigns({
   };
 
   // Campaign Draft / Save
-  const handleSaveCampaignDraft = async () => {
+  const handleSaveCampaignDraft = async (seqOpts?: { sequenceMode: boolean; steps: any[]; reminderEmail: string; reminderHoursBefore: number }) => {
     if (!campName.trim()) {
       onToast("Please enter a Campaign Name", "error");
       return;
     }
-    if (!campTemplateId) {
+    const isSeq = !!seqOpts?.sequenceMode;
+    const effectiveTemplateId = isSeq ? (seqOpts?.steps?.[0]?.template_id || campTemplateId) : campTemplateId;
+
+    if (!isSeq && !campTemplateId) {
       onToast("Please select an email template", "error");
+      return;
+    }
+    if (isSeq && !effectiveTemplateId) {
+      onToast("Please select at least one template in the sequence steps to save draft", "error");
       return;
     }
 
@@ -245,9 +252,9 @@ export function EmailCampaigns({
 
     setSavingDraft(true);
     try {
-      const payload = {
+      const payload: any = {
         name: campName.trim(),
-        template_id: campTemplateId,
+        template_id: effectiveTemplateId,
         smtp_account_id: selectedCampaignSmtpId || undefined,
         audience_sources: selectedSources.length > 0 ? selectedSources : ["sqlite"],
         audience_filters: {
@@ -269,6 +276,14 @@ export function EmailCampaigns({
         draft: true,
       };
 
+      // Attach sequence fields if sequence mode is on
+      if (seqOpts?.sequenceMode) {
+        payload.campaign_type = "sequence";
+        payload.steps = seqOpts.steps;
+        payload.reminder_email = seqOpts.reminderEmail;
+        payload.reminder_hours_before = seqOpts.reminderHoursBefore;
+      }
+
       if (editingCampaignId) {
         await api.updateCampaign(editingCampaignId, payload);
         onToast("Campaign updated successfully", "success");
@@ -286,14 +301,25 @@ export function EmailCampaigns({
   };
 
   // Launch Campaign
-  const handleLaunchCampaign = async () => {
+  const handleLaunchCampaign = async (seqOpts?: { sequenceMode: boolean; steps: any[]; reminderEmail: string; reminderHoursBefore: number }) => {
     if (!campName.trim()) {
       onToast("Please enter a Campaign Name", "error");
       return;
     }
-    if (!campTemplateId) {
-      onToast("Please select an email template", "error");
-      return;
+    const isSeq = !!seqOpts?.sequenceMode;
+    const effectiveTemplateId = isSeq ? (seqOpts?.steps?.[0]?.template_id || campTemplateId) : campTemplateId;
+
+    if (isSeq) {
+      const missingStep = seqOpts?.steps?.findIndex((s) => !s.template_id);
+      if (missingStep !== undefined && missingStep !== -1) {
+        onToast(`Please select a template for Step ${missingStep + 1} in the sequence`, "error");
+        return;
+      }
+    } else {
+      if (!campTemplateId) {
+        onToast("Please select an email template", "error");
+        return;
+      }
     }
     const hasDbSources = campSources.sqlite || campSources.mongo;
     const hasManual = campSources.manual && campManualEmails.trim();
@@ -325,9 +351,9 @@ export function EmailCampaigns({
 
     setLaunching(true);
     try {
-      const payload = {
+      const payload: any = {
         name: campName.trim(),
-        template_id: campTemplateId,
+        template_id: effectiveTemplateId,
         smtp_account_id: selectedCampaignSmtpId || undefined,
         audience_sources: selectedSources,
         audience_filters: {
@@ -349,21 +375,34 @@ export function EmailCampaigns({
         draft: false,
       };
 
+      // Attach sequence fields if sequence mode is on
+      if (seqOpts?.sequenceMode) {
+        payload.campaign_type = "sequence";
+        payload.steps = seqOpts.steps;
+        payload.reminder_email = seqOpts.reminderEmail;
+        payload.reminder_hours_before = seqOpts.reminderHoursBefore;
+      }
+
       let cid: string | null = null;
       if (editingCampaignId) {
         await api.updateCampaign(editingCampaignId, payload);
-        const res = await api.launchCampaignById(editingCampaignId);
-        onToast(res.message, "success");
+        if (!seqOpts?.sequenceMode) {
+          // One-shot: launch via dedicated endpoint
+          const res = await api.launchCampaignById(editingCampaignId);
+          onToast(res.message, "success");
+        } else {
+          onToast("Sequence campaign updated. Steps will fire on schedule.", "success");
+        }
         cid = editingCampaignId;
       } else {
         const res = await api.createCampaign(payload);
         onToast(res.message, "success");
-        cid = res.data.campaign_id || res.data.id || null;
+        cid = res.data?.campaign_id || res.data?.id || null;
       }
 
       setActiveCampaignId(cid);
       setEditingCampaignId(null);
-      setActivePanel("send");
+      setActivePanel(seqOpts?.sequenceMode ? "history" : "send");
       loadCampaigns();
     } catch (e: any) {
       onToast(e.message || "Failed to launch campaign", "error");

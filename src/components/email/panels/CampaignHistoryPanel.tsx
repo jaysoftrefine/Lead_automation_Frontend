@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, RefreshCw, Edit3, Rocket, List, Trash2 } from "lucide-react";
+import { Clock, RefreshCw, Edit3, Rocket, List, Trash2, GitBranch } from "lucide-react";
 import type { Campaign } from "../../../types/email";
 
 export interface CampaignHistoryPanelProps {
@@ -77,9 +77,31 @@ export function CampaignHistoryPanel({
                       style={{
                         fontWeight: 700,
                         color: "var(--text-primary)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        flexWrap: "wrap",
                       }}
                     >
                       {c.name}
+                      {c.campaign_type === "sequence" && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            fontSize: "0.68rem",
+                            padding: "2px 7px",
+                            borderRadius: "99px",
+                            background: "rgba(99,102,241,0.15)",
+                            color: "var(--accent-violet)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          <GitBranch style={{ width: "9px", height: "9px" }} />
+                          Sequence
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td style={{ color: "var(--text-muted)" }}>
@@ -94,14 +116,19 @@ export function CampaignHistoryPanel({
                           ? "info"
                           : c.status === "failed"
                           ? "error"
+                          : c.status === "scheduled"
+                          ? "info"
                           : ""
                       }`}
                       style={{
                         fontSize: "0.72rem",
                         textTransform: "capitalize",
+                        background: c.status === "scheduled" ? "rgba(251,191,36,0.15)" : undefined,
+                        color: c.status === "scheduled" ? "var(--accent-amber)" : undefined,
+                        border: c.status === "scheduled" ? "1px solid rgba(251,191,36,0.3)" : undefined,
                       }}
                     >
-                      {c.status}
+                      {c.status === "scheduled" ? "⏰ Scheduled" : c.status}
                     </span>
                   </td>
                   <td style={{ color: "#10b981", fontWeight: 700 }}>

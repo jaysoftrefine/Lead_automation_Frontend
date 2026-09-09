@@ -11,10 +11,28 @@ import {
   Edit3,
   Trash2,
   Rocket,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { api } from "../../../services/api";
 import type { Audience } from "../../../types/email";
 import { Pagination } from "../../common/Pagination";
+
+function formatContactDate(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const clean = dateStr.includes("T") ? dateStr : dateStr.replace(" ", "T");
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) {
+      const d2 = new Date(dateStr);
+      if (isNaN(d2.getTime())) return String(dateStr);
+      return d2.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return String(dateStr);
+  }
+}
 
 export interface AudiencesPanelProps {
   audiences: Audience[];
@@ -59,6 +77,14 @@ export function AudiencesPanel({
   const [loadingBrowseContacts, setLoadingBrowseContacts] = useState(false);
   const [audSelectedMap, setAudSelectedMap] = useState<Record<string, any>>({});
 
+  // Date Filter states
+  const [audDatePreset, setAudDatePreset] = useState<string>("all");
+  const [audDateFrom, setAudDateFrom] = useState<string>("");
+  const [audDateTo, setAudDateTo] = useState<string>("");
+  const [audDateField, setAudDateField] = useState<string>("any");
+  const [audSortBy, setAudSortBy] = useState<string>("date");
+  const [audSortDir, setAudSortDir] = useState<"asc" | "desc">("desc");
+
   const loadBrowseContacts = async (page = 1) => {
     setLoadingBrowseContacts(true);
     try {
@@ -72,15 +98,25 @@ export function AudiencesPanel({
         setLoadingBrowseContacts(false);
         return;
       }
-      const res = await api.browseRecipients({
+      const params: Record<string, any> = {
         sources: srcs.join(","),
         country: audCountry.trim(),
         category: audCategory.trim(),
         search: audBrowseSearch.trim(),
         lead_type: audSources.mongo && audLeadType !== "all" ? audLeadType : "",
+        sort_by: audSortBy,
+        sort_dir: audSortDir,
         page,
         per_page: 25,
-      });
+      };
+      if (audDatePreset && audDatePreset !== "all") {
+        params.date_preset = audDatePreset;
+      }
+      if (audDateFrom) params.date_from = audDateFrom;
+      if (audDateTo) params.date_to = audDateTo;
+      if (audDateField && audDateField !== "any") params.date_field = audDateField;
+
+      const res = await api.browseRecipients(params);
       if (res.status === "success" && res.data) {
         setAudBrowseContacts(res.data.items || []);
         setAudBrowseTotal(res.data.total || 0);
@@ -109,7 +145,22 @@ export function AudiencesPanel({
     audCategory,
     audBrowseSearch,
     audLeadType,
+    audDatePreset,
+    audDateFrom,
+    audDateTo,
+    audDateField,
+    audSortBy,
+    audSortDir,
   ]);
+
+  const handleToggleDateSort = () => {
+    if (audSortBy === "date") {
+      setAudSortDir((prev) => (prev === "desc" ? "asc" : "desc"));
+    } else {
+      setAudSortBy("date");
+      setAudSortDir("desc");
+    }
+  };
 
   const toggleSelectBrowseContact = (contact: any) => {
     const key = (contact.email || contact.id).toLowerCase();
@@ -131,6 +182,10 @@ export function AudiencesPanel({
           country: contact.country,
           category: contact.category,
           source: contact.source,
+          date: contact.date,
+          date_posted: contact.date_posted,
+          scraped_at: contact.scraped_at,
+          created_at: contact.created_at,
         };
       }
       setAudSelectedContacts(Object.values(next));
@@ -156,6 +211,10 @@ export function AudiencesPanel({
           country: c.country,
           category: c.category,
           source: c.source,
+          date: c.date,
+          date_posted: c.date_posted,
+          scraped_at: c.scraped_at,
+          created_at: c.created_at,
         };
       });
       setAudSelectedContacts(Object.values(next));
@@ -188,6 +247,10 @@ export function AudiencesPanel({
     setAudCountry("");
     setAudCategory("");
     setAudLeadType("all");
+    setAudDatePreset("all");
+    setAudDateFrom("");
+    setAudDateTo("");
+    setAudDateField("any");
     setAudManualEmails("");
     setAudSelectedContacts([]);
     setAudSelectedMap({});
@@ -206,6 +269,10 @@ export function AudiencesPanel({
     setAudCountry(aud.filters?.country || "");
     setAudCategory(aud.filters?.category || "");
     setAudLeadType(aud.filters?.lead_type || "all");
+    setAudDatePreset(aud.filters?.date_preset || "all");
+    setAudDateFrom(aud.filters?.date_from || "");
+    setAudDateTo(aud.filters?.date_to || "");
+    setAudDateField(aud.filters?.date_field || "any");
     setAudManualEmails((aud.manual_recipients || []).join("\n"));
 
     const sel = aud.selected_recipients || [];
@@ -264,6 +331,10 @@ export function AudiencesPanel({
           country: audCountry.trim(),
           category: audCategory.trim(),
           lead_type: audLeadType,
+          date_preset: audDatePreset,
+          date_from: audDateFrom,
+          date_to: audDateTo,
+          date_field: audDateField,
         },
         manual_recipients: manualList,
         selected_recipients: audSelectedContacts.map((c) => ({
@@ -782,6 +853,230 @@ export function AudiencesPanel({
                     onChange={(e) => setAudCategory(e.target.value)}
                   />
                 </div>
+
+                {/* Filter by Date */}
+                <div className="form-group">
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    <label
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "0.82rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        margin: 0,
+                      }}
+                    >
+                      <Calendar
+                        style={{
+                          width: "13px",
+                          height: "13px",
+                          color: "#ea580c",
+                        }}
+                      />
+                      <span>Filter by Date</span>
+                    </label>
+                    {(audDatePreset !== "all" || audDateFrom || audDateTo) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAudDatePreset("all");
+                          setAudDateFrom("");
+                          setAudDateTo("");
+                          setAudDateField("any");
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--accent-rose)",
+                          fontSize: "0.72rem",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✕ Clear Date
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Date preset chips */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: "5px",
+                    }}
+                  >
+                    {[
+                      { key: "all", label: "All Time" },
+                      { key: "today", label: "Past 24h" },
+                      { key: "7d", label: "7 Days" },
+                      { key: "30d", label: "30 Days" },
+                      { key: "90d", label: "90 Days" },
+                      { key: "custom", label: "Custom..." },
+                    ].map((p) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => {
+                          setAudDatePreset(p.key);
+                          if (p.key !== "custom") {
+                            setAudDateFrom("");
+                            setAudDateTo("");
+                          }
+                        }}
+                        style={{
+                          padding: "5px 4px",
+                          fontSize: "0.72rem",
+                          borderRadius: "6px",
+                          border:
+                            audDatePreset === p.key
+                              ? "1.5px solid #ea580c"
+                              : "1px solid var(--border-subtle)",
+                          background:
+                            audDatePreset === p.key
+                              ? "rgba(234, 88, 12, 0.14)"
+                              : "var(--chip-bg, transparent)",
+                          color:
+                            audDatePreset === p.key
+                              ? "#ea580c"
+                              : "var(--text-secondary)",
+                          fontWeight: audDatePreset === p.key ? 700 : 500,
+                          cursor: "pointer",
+                          textAlign: "center",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Date Pickers */}
+                  {audDatePreset === "custom" && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "6px",
+                        marginTop: "8px",
+                        padding: "8px",
+                        background: "rgba(234, 88, 12, 0.04)",
+                        borderRadius: "8px",
+                        border: "1px dashed rgba(234, 88, 12, 0.3)",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "var(--text-muted)",
+                            display: "block",
+                            marginBottom: "2px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          From:
+                        </span>
+                        <input
+                          type="date"
+                          className="eu-input"
+                          style={{
+                            padding: "4px 6px",
+                            fontSize: "0.75rem",
+                            width: "100%",
+                          }}
+                          value={audDateFrom}
+                          onChange={(e) => setAudDateFrom(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "var(--text-muted)",
+                            display: "block",
+                            marginBottom: "2px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          To:
+                        </span>
+                        <input
+                          type="date"
+                          className="eu-input"
+                          style={{
+                            padding: "4px 6px",
+                            fontSize: "0.75rem",
+                            width: "100%",
+                          }}
+                          value={audDateTo}
+                          onChange={(e) => setAudDateTo(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Date Target Field (Any, Posted, Scraped) */}
+                  {audSources.mongo && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "5px",
+                        marginTop: "5px",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        Target:
+                      </span>
+                      {[
+                        { key: "any", label: "Any" },
+                        { key: "posted", label: "Posted" },
+                        { key: "scraped", label: "Scraped" },
+                      ].map((tf) => (
+                        <button
+                          key={tf.key}
+                          type="button"
+                          onClick={() => setAudDateField(tf.key)}
+                          style={{
+                            padding: "2px 8px",
+                            fontSize: "0.7rem",
+                            borderRadius: "4px",
+                            border:
+                              audDateField === tf.key
+                                ? "1px solid #ea580c"
+                                : "1px solid var(--border-subtle)",
+                            background:
+                              audDateField === tf.key
+                                ? "rgba(234, 88, 12, 0.15)"
+                                : "transparent",
+                            color:
+                              audDateField === tf.key
+                                ? "#ea580c"
+                                : "var(--text-muted)",
+                            fontWeight: audDateField === tf.key ? 700 : 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {tf.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="form-group">
                   <label style={{ fontWeight: 600, fontSize: "0.82rem" }}>
                     Search Contacts &amp; Companies
@@ -958,11 +1253,37 @@ export function AudiencesPanel({
                     fontSize: "0.78rem",
                     color: "var(--text-muted)",
                     marginTop: "2px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
                   }}
                 >
-                  Showing {audBrowseContacts.length} of {audBrowseTotal} available
-                  leads across selected sources. Check boxes to partially select
-                  companies.
+                  <span>
+                    Showing {audBrowseContacts.length} of {audBrowseTotal} available
+                    leads across selected sources. Check boxes to partially select
+                    companies.
+                  </span>
+                  {(audDatePreset !== "all" || audDateFrom || audDateTo) && (
+                    <span
+                      style={{
+                        background: "rgba(234, 88, 12, 0.12)",
+                        color: "#ea580c",
+                        padding: "1px 8px",
+                        borderRadius: "6px",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Calendar style={{ width: "11px", height: "11px" }} />
+                      <span>
+                        Date: {audDatePreset !== "custom" ? audDatePreset.toUpperCase() : `${audDateFrom || "Start"} → ${audDateTo || "Now"}`}
+                      </span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1071,6 +1392,7 @@ export function AudiencesPanel({
               <table
                 style={{
                   width: "100%",
+                  tableLayout: "fixed",
                   borderCollapse: "collapse",
                   fontSize: "0.83rem",
                   textAlign: "left",
@@ -1083,7 +1405,7 @@ export function AudiencesPanel({
                       borderBottom: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <th style={{ width: "42px", padding: "11px 14px" }}>
+                    <th style={{ width: "42px", minWidth: "42px", padding: "11px 12px" }}>
                       <input
                         type="checkbox"
                         style={{
@@ -1106,7 +1428,8 @@ export function AudiencesPanel({
                     </th>
                     <th
                       style={{
-                        padding: "11px 14px",
+                        width: "18%",
+                        padding: "11px 12px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1115,7 +1438,8 @@ export function AudiencesPanel({
                     </th>
                     <th
                       style={{
-                        padding: "11px 14px",
+                        width: "17%",
+                        padding: "11px 12px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1124,7 +1448,8 @@ export function AudiencesPanel({
                     </th>
                     <th
                       style={{
-                        padding: "11px 14px",
+                        width: "23%",
+                        padding: "11px 12px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1132,8 +1457,28 @@ export function AudiencesPanel({
                       Email
                     </th>
                     <th
+                      onClick={handleToggleDateSort}
                       style={{
-                        padding: "11px 14px",
+                        width: "14%",
+                        padding: "11px 12px",
+                        fontWeight: 700,
+                        color: "var(--text-primary)",
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                      title="Click to toggle newest / oldest"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <span>Date Scraped</span>
+                        <span style={{ color: "#ea580c", fontSize: "0.82rem", fontWeight: 800 }}>
+                          {audSortDir === "desc" ? "↓" : "↑"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      style={{
+                        width: "14%",
+                        padding: "11px 12px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1142,7 +1487,8 @@ export function AudiencesPanel({
                     </th>
                     <th
                       style={{
-                        padding: "11px 14px",
+                        width: "14%",
+                        padding: "11px 12px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1155,7 +1501,7 @@ export function AudiencesPanel({
                   {loadingBrowseContacts ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         style={{ textAlign: "center", padding: "50px 20px" }}
                       >
                         <div
@@ -1175,7 +1521,7 @@ export function AudiencesPanel({
                   ) : audBrowseContacts.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         style={{
                           textAlign: "center",
                           padding: "60px 20px",
@@ -1207,7 +1553,7 @@ export function AudiencesPanel({
                           }}
                         >
                           <td
-                            style={{ padding: "11px 14px" }}
+                            style={{ width: "42px", minWidth: "42px", padding: "11px 12px" }}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <input
@@ -1223,14 +1569,26 @@ export function AudiencesPanel({
                           </td>
                           <td
                             style={{
-                              padding: "11px 14px",
+                              padding: "11px 12px",
                               fontWeight: 600,
                               color: "var(--text-primary)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
+                            title={c.person_name || "Leadership"}
                           >
                             {c.person_name || "Leadership"}
                           </td>
-                          <td style={{ padding: "11px 14px" }}>
+                          <td
+                            style={{
+                              padding: "11px 12px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={c.company_name}
+                          >
                             {c.website ? (
                               <a
                                 href={
@@ -1262,15 +1620,58 @@ export function AudiencesPanel({
                           </td>
                           <td
                             style={{
-                              padding: "11px 14px",
+                              padding: "11px 12px",
                               fontFamily: "monospace",
                               fontSize: "0.8rem",
                               color: "var(--text-secondary)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
+                            title={c.email}
                           >
                             {c.email}
                           </td>
-                          <td style={{ padding: "11px 14px" }}>
+                          <td
+                            style={{
+                              padding: "11px 12px",
+                              fontSize: "0.78rem",
+                              color: "var(--text-secondary)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {c.date ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontWeight: 600,
+                                  color: "var(--text-primary)",
+                                }}
+                              >
+                                <Calendar
+                                  style={{
+                                    width: "11px",
+                                    height: "11px",
+                                    color: "#ea580c",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {formatContactDate(c.date)}
+                              </span>
+                            ) : (
+                              <span style={{ color: "var(--text-dim)" }}>—</span>
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              padding: "11px 12px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
                             <div
                               style={{
                                 display: "flex",
@@ -1330,10 +1731,10 @@ export function AudiencesPanel({
                                   }}
                                 >
                                   {c.lead_type === "company"
-                                    ? "🏢 Company"
+                                    ? "Company"
                                     : c.lead_type === "personal"
-                                    ? "👤 Personal"
-                                    : "❓ Others"}
+                                    ? "Personal"
+                                    : "General"}
                                 </span>
                               )}
                               {c.country && (
@@ -1357,7 +1758,11 @@ export function AudiencesPanel({
                               padding: "11px 14px",
                               color: "var(--text-muted)",
                               fontSize: "0.78rem",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
+                            title={c.role || "Executive"}
                           >
                             {c.role || "Executive"}
                           </td>

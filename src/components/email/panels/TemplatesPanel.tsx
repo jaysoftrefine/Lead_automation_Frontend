@@ -38,6 +38,7 @@ export function TemplatesPanel({
   const [tplId, setTplId] = useState("");
   const [tplName, setTplName] = useState("");
   const [tplSubject, setTplSubject] = useState("");
+  const [tplCc, setTplCc] = useState("");
   const [tplBody, setTplBody] = useState("");
   const [attachmentPath, setAttachmentPath] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
@@ -196,6 +197,7 @@ export function TemplatesPanel({
     setTplId("");
     setTplName("");
     setTplSubject("");
+    setTplCc("");
     setTplBody("");
     setAttachmentPath("");
     setAttachmentName("");
@@ -207,6 +209,7 @@ export function TemplatesPanel({
     setTplId(t.id);
     setTplName(t.name);
     setTplSubject(t.subject);
+    setTplCc((t as any).cc || "");
     setTplBody(t.body);
     setAttachmentPath(t.attachment_path || "");
     setAttachmentName(t.attachment_name || "");
@@ -225,6 +228,7 @@ export function TemplatesPanel({
         name: tplName.trim(),
         subject: tplSubject.trim(),
         body: tplBody,
+        cc: tplCc.trim() || null,
         attachment_path: attachmentPath || null,
         attachment_name: attachmentName || null,
       };
@@ -641,6 +645,23 @@ export function TemplatesPanel({
                   placeholder="e.g. Quick question regarding {{company_name}}"
                   value={tplSubject}
                   onChange={(e) => setTplSubject(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="tpl-cc" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  CC
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 400 }}>
+                    (optional — comma-separated)
+                  </span>
+                </label>
+                <input
+                  id="tpl-cc"
+                  type="text"
+                  className="eu-input"
+                  placeholder="e.g. manager@company.com, cto@company.com"
+                  value={tplCc}
+                  onChange={(e) => setTplCc(e.target.value)}
                 />
               </div>
 
