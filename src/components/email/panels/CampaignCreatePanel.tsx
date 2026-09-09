@@ -1109,12 +1109,20 @@ export function CampaignCreatePanel({
                         .replace(/\{\{email\}\}/g, "john@stackshift.com")
                         .replace(/\{\{website\}\}/g, "https://stackshift.com")
                         .replace(
-                          /\{\{ai_company_hook\}\}/g,
+                          /\{\{(ai_company_hook_temp1|temp1_ai_company_hook|ai_company_hook)\}\}/g,
                           "your engineering talent platform for tech leaders"
                         )
                         .replace(
-                          /\{\{ai_value_pitch\}\}/g,
+                          /\{\{(ai_value_pitch_temp1|temp1_ai_value_pitch|ai_value_pitch)\}\}/g,
                           "scaling autonomous AI workflows and backend systems"
+                        )
+                        .replace(
+                          /\{\{(ai_company_hook_temp2|temp2_ai_company_hook)\}\}/g,
+                          "following up on how we can support your tech initiatives"
+                        )
+                        .replace(
+                          /\{\{(ai_value_pitch_temp2|temp2_ai_value_pitch)\}\}/g,
+                          "sharing case studies and exploring tailored engineering collaboration"
                         ),
                     }}
                   />

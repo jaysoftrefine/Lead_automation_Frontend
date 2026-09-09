@@ -50,6 +50,7 @@ export function TemplatesPanel({
   const [previewSubject, setPreviewSubject] = useState("Subject will appear here");
   const [previewBody, setPreviewBody] = useState("");
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [refreshingTemplates, setRefreshingTemplates] = useState(false);
   const [editorMode, setEditorMode] = useState<"visual" | "html">("visual");
 
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -105,6 +106,24 @@ export function TemplatesPanel({
     return text.trim().replace(/\n/g, "<br/>");
   };
 
+  const handleRefreshTemplates = async () => {
+    if (refreshingTemplates) return;
+    setRefreshingTemplates(true);
+    const start = Date.now();
+    try {
+      await Promise.resolve(onTemplatesChange());
+    } catch {
+      // ignore
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDelay = 450;
+      const remaining = Math.max(0, minDelay - elapsed);
+      setTimeout(() => {
+        setRefreshingTemplates(false);
+      }, remaining);
+    }
+  };
+
   const handleRefreshPreview = async (
     sub = tplSubject,
     body = tplBody,
@@ -115,6 +134,7 @@ export function TemplatesPanel({
       return;
     }
     setLoadingPreview(true);
+    const start = Date.now();
     try {
       const res = await api.previewRawTemplate({
         subject: sub,
@@ -127,7 +147,12 @@ export function TemplatesPanel({
       setPreviewSubject(sub);
       setPreviewBody(body);
     } finally {
-      setLoadingPreview(false);
+      const elapsed = Date.now() - start;
+      const minDelay = 350;
+      const remaining = Math.max(0, minDelay - elapsed);
+      setTimeout(() => {
+        setLoadingPreview(false);
+      }, remaining);
     }
   };
 
@@ -413,16 +438,36 @@ export function TemplatesPanel({
             </div>
             <button
               type="button"
-              onClick={onTemplatesChange}
+              onClick={handleRefreshTemplates}
+              disabled={refreshingTemplates}
               className="btn btn-secondary btn-sm"
-              style={{ fontWeight: 600 }}
+              style={{
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                opacity: refreshingTemplates ? 0.8 : 1,
+                cursor: refreshingTemplates ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Refresh Saved Templates"
             >
-              <RefreshCw style={{ width: "13px", height: "13px" }} />
-              <span>Refresh</span>
+              <RefreshCw
+                style={{
+                  width: "13px",
+                  height: "13px",
+                  animation: refreshingTemplates ? "spin 0.75s linear infinite" : "none",
+                }}
+              />
+              <span>{refreshingTemplates ? "Refreshing..." : "Refresh"}</span>
             </button>
           </div>
 
-          {templates.length === 0 ? (
+          {refreshingTemplates ? (
+            <div style={{ textAlign: "center", padding: "50px" }}>
+              <div className="spinner" />
+            </div>
+          ) : templates.length === 0 ? (
             <div
               style={{
                 textAlign: "center",

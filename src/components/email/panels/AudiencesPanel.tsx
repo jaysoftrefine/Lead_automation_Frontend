@@ -53,6 +53,24 @@ export function AudiencesPanel({
   const [loadingAudiences, setLoadingAudiences] = useState(false);
   const [editingAudienceId, setEditingAudienceId] = useState<string | null>(null);
 
+  const handleRefreshAudiences = async () => {
+    if (loadingAudiences) return;
+    setLoadingAudiences(true);
+    const start = Date.now();
+    try {
+      await Promise.resolve(onAudiencesChange());
+    } catch {
+      // ignore
+    } finally {
+      const elapsed = Date.now() - start;
+      const minDelay = 350;
+      const remaining = Math.max(0, minDelay - elapsed);
+      setTimeout(() => {
+        setLoadingAudiences(false);
+      }, remaining);
+    }
+  };
+
   // Form Fields
   const [audName, setAudName] = useState("");
   const [audDescription, setAudDescription] = useState("");
@@ -1817,12 +1835,28 @@ export function AudiencesPanel({
             </div>
             <button
               type="button"
-              onClick={onAudiencesChange}
+              onClick={handleRefreshAudiences}
+              disabled={loadingAudiences}
               className="btn btn-secondary btn-sm"
-              style={{ fontWeight: 600 }}
+              style={{
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                opacity: loadingAudiences ? 0.8 : 1,
+                cursor: loadingAudiences ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Refresh Saved Audiences"
             >
-              <RefreshCw style={{ width: "13px", height: "13px" }} />
-              <span>Refresh</span>
+              <RefreshCw
+                style={{
+                  width: "13px",
+                  height: "13px",
+                  animation: loadingAudiences ? "spin 0.75s linear infinite" : "none",
+                }}
+              />
+              <span>{loadingAudiences ? "Refreshing..." : "Refresh"}</span>
             </button>
           </div>
 
