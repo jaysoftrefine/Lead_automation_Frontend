@@ -350,11 +350,16 @@ export function CampaignCreatePanel({
               }}
             >
               <option value="">— Select a saved audience —</option>
-              {audiences.map((a: any) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} (~{a.contact_count || a.selected_recipients?.length || 0} contacts)
-                </option>
-              ))}
+              {audiences.map((a: any) => {
+                const effectiveCount = a.selected_recipients?.length
+                  ? a.selected_recipients.length + (a.manual_recipients?.length || 0)
+                  : (a.contact_count || 0);
+                return (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({effectiveCount === 1 ? "1 contact" : `~${effectiveCount} contacts`})
+                  </option>
+                );
+              })}
             </select>
           </div>
 

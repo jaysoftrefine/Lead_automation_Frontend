@@ -85,6 +85,8 @@ export function AudiencesPanel({
   const [audLeadType, setAudLeadType] = useState("all");
   const [audManualEmails, setAudManualEmails] = useState("");
   const [audSelectedContacts, setAudSelectedContacts] = useState<any[]>([]);
+  const [tableFilterMode, setTableFilterMode] = useState<"selected" | "all">("all");
+  const [selectedPage, setSelectedPage] = useState(1);
   const [savingAudience, setSavingAudience] = useState(false);
 
   // Manual Entry Modal (Job Lead vs European Startup)
@@ -278,6 +280,8 @@ export function AudiencesPanel({
   const handleClearAllSelectedContacts = () => {
     setAudSelectedMap({});
     setAudSelectedContacts([]);
+    setTableFilterMode("all");
+    setSelectedPage(1);
   };
 
   const handleResetAudienceForm = () => {
@@ -295,6 +299,8 @@ export function AudiencesPanel({
     setAudManualEmails("");
     setAudSelectedContacts([]);
     setAudSelectedMap({});
+    setTableFilterMode("all");
+    setSelectedPage(1);
   };
 
   const handleEditAudience = (aud: any) => {
@@ -325,6 +331,13 @@ export function AudiencesPanel({
     });
     setAudSelectedMap(selMap);
 
+    if (sel.length > 0) {
+      setTableFilterMode("selected");
+    } else {
+      setTableFilterMode("all");
+    }
+    setSelectedPage(1);
+
     setAudViewMode("builder");
   };
 
@@ -344,23 +357,34 @@ export function AudiencesPanel({
       onToast("Please enter an Audience Name", "error");
       return;
     }
-    const sources: string[] = [];
-    if (audSources.sqlite) sources.push("sqlite");
-    if (audSources.mongo) sources.push("mongo");
-    if (audSources.manual && audManualEmails.trim()) sources.push("manual");
-    if (audSelectedContacts.length > 0) sources.push("selected");
-
-    if (sources.length === 0 && audSelectedContacts.length === 0) {
-      onToast("Select at least one audience source or handpick specific companies", "error");
-      return;
-    }
-
-    const manualList = audManualEmails
+    const manualLines = audManualEmails
       ? audManualEmails
-          .split(/[\n,]/)
+          .split("\n")
           .map((e) => e.trim())
           .filter((e) => e.length > 0)
       : [];
+    const manualList: string[] = [];
+    manualLines.forEach((line) => {
+      const match = line.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (match) {
+        manualList.push(match[0]);
+      } else if (line.includes("@")) {
+        manualList.push(line.trim());
+      }
+    });
+
+    const sources: string[] = [];
+    if (audSelectedContacts.length > 0) {
+      sources.push("selected");
+    }
+    if (audSources.manual && manualList.length > 0) {
+      sources.push("manual");
+    }
+    // Only target general databases if no specific contacts were selected AND specific query filters (country/category) were provided
+    if (audSelectedContacts.length === 0 && (audCountry.trim() || audCategory.trim())) {
+      if (audSources.sqlite) sources.push("sqlite");
+      if (audSources.mongo) sources.push("mongo");
+    }
 
     setSavingAudience(true);
     try {
@@ -566,11 +590,16 @@ export function AudiencesPanel({
                   }}
                 >
                   <option value="">-- Choose saved audience to edit --</option>
-                  {audiences.map((a: any) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.contact_count || 0} contacts)
-                    </option>
-                  ))}
+                  {audiences.map((a: any) => {
+                    const effectiveCount = a.selected_recipients?.length > 0
+                      ? a.selected_recipients.length
+                      : (a.contact_count || 0);
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({effectiveCount === 1 ? "1 contact" : `${effectiveCount} contacts`})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )
@@ -668,7 +697,7 @@ export function AudiencesPanel({
               <input
                 type="text"
                 className="eu-input"
-                placeholder="e.g. Handpicked Series A AI founders"
+                placeholder="e.g. Series A AI founders"
                 value={audDescription}
                 onChange={(e) => setAudDescription(e.target.value)}
               />
@@ -1153,51 +1182,48 @@ export function AudiencesPanel({
             {/* Manual contacts list */}
             {audSources.manual && (
               <div className="form-group">
-                <div
+                <label
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
                     marginBottom: "6px",
+                    display: "block",
                   }}
                 >
-                  <label
-                    style={{
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
-                      margin: 0,
-                    }}
-                  >
-                    Manual Contacts
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowManualEntryModal(true)}
-                    className="btn btn-secondary btn-sm"
-                    style={{
-                      padding: "3px 8px",
-                      fontSize: "0.72rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      color: "#ea580c",
-                      borderColor: "rgba(234, 88, 12, 0.3)",
-                      background: "rgba(234, 88, 12, 0.08)",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    <Plus style={{ width: "12px", height: "12px" }} />
-                    <span>+ Add via Manual Entry (Job or Startup)</span>
-                  </button>
-                </div>
+                  Manual Contacts
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setShowManualEntryModal(true)}
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    width: "100%",
+                    justifyContent: "center",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 12px",
+                    fontSize: "0.76rem",
+                    fontWeight: 600,
+                    marginBottom: "8px",
+                    color: "#ea580c",
+                    borderColor: "rgba(234, 88, 12, 0.3)",
+                    background: "rgba(234, 88, 12, 0.08)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus style={{ width: "13px", height: "13px" }} />
+                  <span>Add via Manual Entry (Job or Startup)</span>
+                </button>
+
                 <textarea
                   className="eu-textarea"
                   rows={3}
-                  placeholder="Name, Company, email@domain.com&#10;or founder@example.com"
+                  placeholder="Or paste contacts directly:&#10;Name, Company, email@domain.com"
                   value={audManualEmails}
                   onChange={(e) => setAudManualEmails(e.target.value)}
-                  style={{ fontSize: "0.8rem", fontFamily: "monospace" }}
+                  style={{ fontSize: "0.8rem", fontFamily: "var(--font-mono)", resize: "vertical" }}
                 />
               </div>
             )}
@@ -1251,8 +1277,7 @@ export function AudiencesPanel({
                   marginTop: "3px",
                 }}
               >
-                Check or uncheck contacts in the table on the right to handpick
-                companies.
+                Check or uncheck contacts in the table on the right to select contacts.
               </div>
             </div>
 
@@ -1285,125 +1310,244 @@ export function AudiencesPanel({
           </div>
 
           {/* Right Column: ImHUB Style Lead Table */}
-          <div
-            className="glass-card"
-            style={{
-              padding: "1.25rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-              minHeight: "680px",
-              borderRadius: "14px",
-            }}
-          >
-            {/* Table Top Action Bar */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "10px",
-                borderBottom: "1px solid var(--border-subtle)",
-                paddingBottom: "0.75rem",
-              }}
-            >
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1.05rem",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Users
-                    style={{
-                      width: "18px",
-                      height: "18px",
-                      color: "#ea580c",
-                    }}
-                  />
-                  <span>Selected Audience / Directory</span>
-                </h3>
+          {(() => {
+            const displayedContacts =
+              tableFilterMode === "selected"
+                ? audSelectedContacts.slice((selectedPage - 1) * 25, selectedPage * 25)
+                : audBrowseContacts;
+
+            return (
+              <div
+                className="glass-card"
+                style={{
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                  minHeight: "680px",
+                  borderRadius: "14px",
+                }}
+              >
+                {/* Table Top Action Bar */}
                 <div
                   style={{
-                    fontSize: "0.78rem",
-                    color: "var(--text-muted)",
-                    marginTop: "2px",
                     display: "flex",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: "8px",
                     flexWrap: "wrap",
+                    gap: "10px",
+                    borderBottom: "1px solid var(--border-subtle)",
+                    paddingBottom: "0.75rem",
                   }}
                 >
-                  <span>
-                    Showing {audBrowseContacts.length} of {audBrowseTotal} available
-                    leads across selected sources. Check boxes to partially select
-                    companies.
-                  </span>
-                  {(audDatePreset !== "all" || audDateFrom || audDateTo) && (
-                    <span
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "1.05rem",
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <Users
+                          style={{
+                            width: "18px",
+                            height: "18px",
+                            color: "#ea580c",
+                          }}
+                        />
+                        <span>{tableFilterMode === "selected" ? "Selected Contacts" : "Directory / Lead Explorer"}</span>
+                      </h3>
+
+                      {/* Mode switcher tabs */}
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          background: "rgba(255,255,255,0.06)",
+                          padding: "2px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--border-subtle)",
+                          gap: "2px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTableFilterMode("selected");
+                            setSelectedPage(1);
+                          }}
+                          style={{
+                            border: "none",
+                            background: tableFilterMode === "selected" ? "#ea580c" : "transparent",
+                            color: tableFilterMode === "selected" ? "#fff" : "var(--text-muted)",
+                            padding: "3px 10px",
+                            borderRadius: "6px",
+                            fontSize: "0.76rem",
+                            fontWeight: tableFilterMode === "selected" ? 700 : 500,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>✓ Selected Only</span>
+                          <span
+                            style={{
+                              background: tableFilterMode === "selected" ? "rgba(255,255,255,0.25)" : "rgba(234,88,12,0.15)",
+                              color: tableFilterMode === "selected" ? "#fff" : "#ea580c",
+                              padding: "1px 6px",
+                              borderRadius: "10px",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {audSelectedContacts.length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTableFilterMode("all")}
+                          style={{
+                            border: "none",
+                            background: tableFilterMode === "all" ? "var(--bg-card-hover)" : "transparent",
+                            color: tableFilterMode === "all" ? "var(--text-primary)" : "var(--text-muted)",
+                            padding: "3px 10px",
+                            borderRadius: "6px",
+                            fontSize: "0.76rem",
+                            fontWeight: tableFilterMode === "all" ? 700 : 500,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>Browse All Directory</span>
+                          <span
+                            style={{
+                              background: "rgba(255,255,255,0.08)",
+                              color: "var(--text-secondary)",
+                              padding: "1px 6px",
+                              borderRadius: "10px",
+                              fontSize: "0.68rem",
+                            }}
+                          >
+                            {audBrowseTotal || audBrowseContacts.length}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
                       style={{
-                        background: "rgba(234, 88, 12, 0.12)",
-                        color: "#ea580c",
-                        padding: "1px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.72rem",
-                        fontWeight: 600,
-                        display: "inline-flex",
+                        fontSize: "0.78rem",
+                        color: "var(--text-muted)",
+                        marginTop: "3px",
+                        display: "flex",
                         alignItems: "center",
-                        gap: "4px",
+                        gap: "8px",
+                        flexWrap: "wrap",
                       }}
                     >
-                      <Calendar style={{ width: "11px", height: "11px" }} />
-                      <span>
-                        Date: {audDatePreset !== "custom" ? audDatePreset.toUpperCase() : `${audDateFrom || "Start"} → ${audDateTo || "Now"}`}
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </div>
+                      {tableFilterMode === "selected" ? (
+                        <span>
+                          Showing {audSelectedContacts.length} selected {audSelectedContacts.length === 1 ? "contact" : "contacts"}. Emails will be generated and sent <strong>only</strong> to these contacts.
+                        </span>
+                      ) : (
+                        <span>
+                          Showing {audBrowseContacts.length} of {audBrowseTotal} available leads across selected sources. Check boxes to select contacts.
+                        </span>
+                      )}
+                      {tableFilterMode === "all" && (audDatePreset !== "all" || audDateFrom || audDateTo) && (
+                        <span
+                          style={{
+                            background: "rgba(234, 88, 12, 0.12)",
+                            color: "#ea580c",
+                            padding: "1px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <Calendar style={{ width: "11px", height: "11px" }} />
+                          <span>
+                            Date: {audDatePreset !== "custom" ? audDatePreset.toUpperCase() : `${audDateFrom || "Start"} → ${audDateTo || "Now"}`}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <button
-                  type="button"
-                  onClick={handleSelectAllBrowsePage}
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "0.77rem", fontWeight: 600 }}
-                >
-                  <CheckSquare style={{ width: "13px", height: "13px" }} />
-                  <span>Select All on Page</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeselectAllBrowsePage}
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "0.77rem" }}
-                >
-                  <span>Deselect Page</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => loadBrowseContacts(audBrowsePage)}
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "0.77rem" }}
-                  title="Refresh Directory"
-                >
-                  <RefreshCw
-                    style={{
-                      width: "13px",
-                      height: "13px",
-                      animation: loadingBrowseContacts
-                        ? "spin 1s linear infinite"
-                        : "none",
-                    }}
-                  />
-                </button>
-              </div>
-            </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    {tableFilterMode === "all" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSelectAllBrowsePage}
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: "0.77rem", fontWeight: 600 }}
+                        >
+                          <CheckSquare style={{ width: "13px", height: "13px" }} />
+                          <span>Select All on Page</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeselectAllBrowsePage}
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: "0.77rem" }}
+                        >
+                          <span>Deselect Page</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadBrowseContacts(audBrowsePage)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: "0.77rem" }}
+                          title="Refresh Directory"
+                        >
+                          <RefreshCw
+                            style={{
+                              width: "13px",
+                              height: "13px",
+                              animation: loadingBrowseContacts
+                                ? "spin 1s linear infinite"
+                                : "none",
+                            }}
+                          />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setTableFilterMode("all")}
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: "0.77rem", fontWeight: 600 }}
+                        >
+                          <Plus style={{ width: "13px", height: "13px" }} />
+                          <span>Add More From Directory</span>
+                        </button>
+                        {audSelectedContacts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllSelectedContacts}
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: "0.77rem", color: "var(--accent-rose)" }}
+                          >
+                            <span>Clear All</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
 
             {/* Lead Type Tabs Filter when LinkedIn Leads selected */}
             {audSources.mongo && (
@@ -1494,15 +1638,19 @@ export function AudiencesPanel({
                           height: "16px",
                         }}
                         checked={
-                          audBrowseContacts.length > 0 &&
-                          audBrowseContacts.every(
+                          displayedContacts.length > 0 &&
+                          displayedContacts.every(
                             (c) =>
-                              !!audSelectedMap[(c.email || c.id).toLowerCase()]
+                              !!audSelectedMap[(c.email || c.id || "").toLowerCase()]
                           )
                         }
                         onChange={(e) => {
-                          if (e.target.checked) handleSelectAllBrowsePage();
-                          else handleDeselectAllBrowsePage();
+                          if (tableFilterMode === "selected") {
+                            if (!e.target.checked) handleClearAllSelectedContacts();
+                          } else {
+                            if (e.target.checked) handleSelectAllBrowsePage();
+                            else handleDeselectAllBrowsePage();
+                          }
                         }}
                       />
                     </th>
@@ -1546,14 +1694,25 @@ export function AudiencesPanel({
                         cursor: "pointer",
                         userSelect: "none",
                       }}
-                      title="Click to toggle newest / oldest"
+                      title="Click to sort by date scraped / posted"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <span>Date Scraped</span>
-                        <span style={{ color: "#ea580c", fontSize: "0.82rem", fontWeight: 800 }}>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        Date Scraped
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--accent-orange)",
+                          }}
+                        >
                           {audSortDir === "desc" ? "↓" : "↑"}
                         </span>
-                      </div>
+                      </span>
                     </th>
                     <th
                       style={{
@@ -1568,7 +1727,7 @@ export function AudiencesPanel({
                     <th
                       style={{
                         width: "14%",
-                        padding: "11px 12px",
+                        padding: "11px 14px",
                         fontWeight: 700,
                         color: "var(--text-primary)",
                       }}
@@ -1578,7 +1737,7 @@ export function AudiencesPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {loadingBrowseContacts ? (
+                  {tableFilterMode === "all" && loadingBrowseContacts ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -1598,7 +1757,7 @@ export function AudiencesPanel({
                         </span>
                       </td>
                     </tr>
-                  ) : audBrowseContacts.length === 0 ? (
+                  ) : displayedContacts.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -1608,17 +1767,33 @@ export function AudiencesPanel({
                           color: "var(--text-muted)",
                         }}
                       >
-                        No contacts match the current data sources and filters.
+                        {tableFilterMode === "selected" ? (
+                          <div style={{ padding: "10px 0" }}>
+                            <p style={{ margin: "0 0 12px", fontSize: "0.92rem", color: "var(--text-primary)", fontWeight: 600 }}>
+                              No contacts selected in this audience yet.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setTableFilterMode("all")}
+                              className="btn btn-primary btn-sm"
+                              style={{ background: "#ea580c", borderColor: "#ea580c", color: "#fff" }}
+                            >
+                              Browse Directory to Select Contacts
+                            </button>
+                          </div>
+                        ) : (
+                          "No contacts match the current data sources and filters."
+                        )}
                       </td>
                     </tr>
                   ) : (
-                    audBrowseContacts.map((c) => {
+                    displayedContacts.map((c) => {
                       const isChecked = !!audSelectedMap[
-                        (c.email || c.id).toLowerCase()
+                        (c.email || c.id || "").toLowerCase()
                       ];
                       return (
                         <tr
-                          key={c.id}
+                          key={c.id || c.email}
                           onClick={() => toggleSelectBrowseContact(c)}
                           style={{
                             cursor: "pointer",
@@ -1656,9 +1831,9 @@ export function AudiencesPanel({
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             }}
-                            title={c.person_name || "Leadership"}
+                            title={c.person_name || c.name || "Leadership"}
                           >
-                            {c.person_name || "Leadership"}
+                            {c.person_name || c.name || "Leadership"}
                           </td>
                           <td
                             style={{
@@ -1667,7 +1842,7 @@ export function AudiencesPanel({
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
                             }}
-                            title={c.company_name}
+                            title={c.company_name || c.company}
                           >
                             {c.website ? (
                               <a
@@ -1685,7 +1860,7 @@ export function AudiencesPanel({
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {c.company_name}
+                                {c.company_name || c.company}
                               </a>
                             ) : (
                               <span
@@ -1694,15 +1869,13 @@ export function AudiencesPanel({
                                   color: "var(--text-primary)",
                                 }}
                               >
-                                {c.company_name}
+                                {c.company_name || c.company}
                               </span>
                             )}
                           </td>
                           <td
                             style={{
                               padding: "11px 12px",
-                              fontFamily: "monospace",
-                              fontSize: "0.8rem",
                               color: "var(--text-secondary)",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -1715,114 +1888,52 @@ export function AudiencesPanel({
                           <td
                             style={{
                               padding: "11px 12px",
+                              color: "var(--text-muted)",
                               fontSize: "0.78rem",
-                              color: "var(--text-secondary)",
                               whiteSpace: "nowrap",
                             }}
                           >
-                            {c.date ? (
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  fontWeight: 600,
-                                  color: "var(--text-primary)",
-                                }}
-                              >
-                                <Calendar
-                                  style={{
-                                    width: "11px",
-                                    height: "11px",
-                                    color: "#ea580c",
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                {formatContactDate(c.date)}
-                              </span>
-                            ) : (
-                              <span style={{ color: "var(--text-dim)" }}>—</span>
-                            )}
+                            {formatContactDate(c.date || c.scraped_at || c.created_at)}
                           </td>
-                          <td
-                            style={{
-                              padding: "11px 12px",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
+                          <td style={{ padding: "11px 12px" }}>
                             <div
                               style={{
                                 display: "flex",
-                                gap: "6px",
+                                gap: "4px",
                                 flexWrap: "wrap",
                               }}
                             >
                               <span
                                 style={{
-                                  fontSize: "0.72rem",
-                                  padding: "2px 7px",
-                                  borderRadius: "5px",
-                                  background:
-                                    c.source === "sqlite"
-                                      ? "rgba(6, 182, 212, 0.15)"
-                                      : "rgba(16, 185, 129, 0.15)",
-                                  color:
-                                    c.source === "sqlite"
-                                      ? "var(--accent-cyan)"
-                                      : "var(--accent-emerald)",
-                                  border:
-                                    c.source === "sqlite"
-                                      ? "1px solid rgba(6, 182, 212, 0.3)"
-                                      : "1px solid rgba(16, 185, 129, 0.3)",
+                                  fontSize: "0.68rem",
                                   fontWeight: 600,
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background:
+                                    c.source === "mongo" || c.source === "job"
+                                      ? "rgba(168, 85, 247, 0.12)"
+                                      : "rgba(6, 182, 212, 0.12)",
+                                  color:
+                                    c.source === "mongo" || c.source === "job"
+                                      ? "var(--accent-purple)"
+                                      : "var(--accent-cyan)",
+                                  border: `1px solid ${
+                                    c.source === "mongo" || c.source === "job"
+                                      ? "rgba(168, 85, 247, 0.25)"
+                                      : "rgba(6, 182, 212, 0.25)"
+                                  }`,
                                 }}
                               >
-                                {c.source === "sqlite"
-                                  ? "EU Startups"
-                                  : "LinkedIn Leads"}
+                                {c.source === "mongo" || c.source === "job"
+                                  ? "Job Leads"
+                                  : "EU Startups"}
                               </span>
-                              {c.source !== "sqlite" && c.lead_type && (
-                                <span
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    padding: "2px 7px",
-                                    borderRadius: "5px",
-                                    background:
-                                      c.lead_type === "company"
-                                        ? "rgba(59, 130, 246, 0.15)"
-                                        : c.lead_type === "personal"
-                                        ? "rgba(168, 85, 247, 0.15)"
-                                        : "rgba(107, 114, 128, 0.15)",
-                                    color:
-                                      c.lead_type === "company"
-                                        ? "#3b82f6"
-                                        : c.lead_type === "personal"
-                                        ? "#a855f7"
-                                        : "var(--text-muted)",
-                                    border:
-                                      c.lead_type === "company"
-                                        ? "1px solid rgba(59, 130, 246, 0.3)"
-                                        : c.lead_type === "personal"
-                                        ? "1px solid rgba(168, 85, 247, 0.3)"
-                                        : "1px solid rgba(107, 114, 128, 0.3)",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {c.lead_type === "company"
-                                    ? "Company"
-                                    : c.lead_type === "personal"
-                                    ? "Personal"
-                                    : "General"}
-                                </span>
-                              )}
                               {c.country && (
                                 <span
                                   style={{
-                                    fontSize: "0.72rem",
-                                    padding: "2px 7px",
-                                    borderRadius: "5px",
+                                    fontSize: "0.68rem",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
                                     background: "var(--chip-bg)",
                                     color: "var(--text-secondary)",
                                     border: "1px solid var(--border-subtle)",
@@ -1854,25 +1965,40 @@ export function AudiencesPanel({
               </table>
             </div>
 
-            {/* Pagination Controls using reusable component */}
-            <Pagination
-              page={audBrowsePage}
-              totalPages={audBrowseTotalPages}
-              totalResults={audBrowseTotal}
-              perPage={25}
-              itemLabel="leads"
-              onPageChange={(newPage) => {
-                setAudBrowsePage(newPage);
-                loadBrowseContacts(newPage);
-              }}
-            />
+            {/* Pagination Controls */}
+            {tableFilterMode === "selected" ? (
+              audSelectedContacts.length > 25 && (
+                <Pagination
+                  page={selectedPage}
+                  totalPages={Math.max(1, Math.ceil(audSelectedContacts.length / 25))}
+                  totalResults={audSelectedContacts.length}
+                  perPage={25}
+                  itemLabel="selected leads"
+                  onPageChange={(newPage) => setSelectedPage(newPage)}
+                />
+              )
+            ) : (
+              <Pagination
+                page={audBrowsePage}
+                totalPages={audBrowseTotalPages}
+                totalResults={audBrowseTotal}
+                perPage={25}
+                itemLabel="leads"
+                onPageChange={(newPage) => {
+                  setAudBrowsePage(newPage);
+                  loadBrowseContacts(newPage);
+                }}
+              />
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
+    </div>
+  )}
 
-      {/* VIEW: Saved Audiences Directory */}
-      {audViewMode === "directory" && (
-        <div className="glass-card" style={{ padding: "1.5rem", borderRadius: "14px" }}>
+  {/* VIEW: Saved Audiences Directory */}
+  {audViewMode === "directory" && (
+    <div className="glass-card" style={{ padding: "1.5rem", borderRadius: "14px" }}>
           <div
             style={{
               display: "flex",
@@ -2024,87 +2150,144 @@ export function AudiencesPanel({
                         </p>
                       )}
                     </div>
-                    <span
-                      style={{
-                        fontSize: "0.76rem",
-                        fontWeight: 700,
-                        padding: "4px 10px",
-                        borderRadius: "14px",
-                        background: "rgba(6, 182, 212, 0.12)",
-                        color: "var(--accent-cyan)",
-                        border: "1px solid rgba(6, 182, 212, 0.25)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ~{aud.contact_count || 0} Contacts
-                    </span>
+                    {(() => {
+                      const hasSelected = Boolean(aud.selected_recipients && aud.selected_recipients.length > 0);
+                      const effectiveCount = hasSelected
+                        ? aud.selected_recipients.length
+                        : (aud.contact_count || 0);
+                      return (
+                        <span
+                          style={{
+                            fontSize: "0.76rem",
+                            fontWeight: 700,
+                            padding: "4px 10px",
+                            borderRadius: "14px",
+                            background: effectiveCount === 0 ? "rgba(148, 163, 184, 0.12)" : "rgba(6, 182, 212, 0.12)",
+                            color: effectiveCount === 0 ? "var(--text-muted)" : "var(--accent-cyan)",
+                            border: effectiveCount === 0 ? "1px solid rgba(148, 163, 184, 0.25)" : "1px solid rgba(6, 182, 212, 0.25)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {effectiveCount === 0 ? "0 Contacts" : effectiveCount === 1 ? "1 Contact" : `${hasSelected ? "" : "~"}${effectiveCount} Contacts`}
+                        </span>
+                      );
+                    })()}
                   </div>
 
-                  {/* Tags */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "6px",
-                      flexWrap: "wrap",
-                      fontSize: "0.73rem",
-                    }}
-                  >
-                    {aud.selected_recipients?.length > 0 && (
-                      <span
-                        style={{
-                          background: "rgba(16, 185, 129, 0.15)",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          color: "#10b981",
-                          border: "1px solid rgba(16, 185, 129, 0.3)",
-                          fontWeight: 700,
-                        }}
-                      >
-                        🎯 {aud.selected_recipients.length} Handpicked
-                      </span>
-                    )}
-                    {(aud.sources || []).map((s: string) => (
-                      <span
-                        key={s}
-                        style={{
-                          background: "var(--chip-bg)",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          color: "var(--text-secondary)",
-                          border: "1px solid var(--border-subtle)",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Source: {s}
-                      </span>
-                    ))}
-                    {aud.filters?.country && (
-                      <span
-                        style={{
-                          background: "var(--chip-bg)",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          color: "var(--text-secondary)",
-                          border: "1px solid var(--border-subtle)",
-                        }}
-                      >
-                        Country: {aud.filters.country}
-                      </span>
-                    )}
-                    {aud.filters?.category && (
-                      <span
-                        style={{
-                          background: "var(--chip-bg)",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          color: "var(--text-secondary)",
-                          border: "1px solid var(--border-subtle)",
-                        }}
-                      >
-                        Category: {aud.filters.category}
-                      </span>
-                    )}
-                  </div>
+                  {/* Selected Contacts List or Filters */}
+                  {aud.selected_recipients && aud.selected_recipients.length > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "5px",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {aud.selected_recipients.slice(0, 3).map((r: any, idx: number) => {
+                        const name = r.person_name || r.name || "";
+                        const company = r.company_name || r.company || "";
+                        const email = r.email || "";
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "0.75rem",
+                              background: "var(--chip-bg)",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              border: "1px solid var(--border-subtle)",
+                              color: "var(--text-primary)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>{name || company || email}</span>
+                            {name && company && <span style={{ color: "var(--text-muted)" }}>• {company}</span>}
+                            {email && <span style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>({email})</span>}
+                          </div>
+                        );
+                      })}
+                      {aud.selected_recipients.length > 3 && (
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "var(--text-muted)",
+                            fontStyle: "italic",
+                            paddingLeft: "2px",
+                          }}
+                        >
+                          +{aud.selected_recipients.length - 3} more selected contacts
+                        </span>
+                      )}
+                    </div>
+                  ) : (!aud.selected_recipients?.length && (aud.contact_count === 0 || !aud.sources?.length)) ? (
+                    <div
+                      style={{
+                        padding: "6px 0",
+                        fontSize: "0.78rem",
+                        color: "var(--text-dim)",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      No contacts selected yet. Click Edit to select contacts.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                        fontSize: "0.73rem",
+                      }}
+                    >
+                      {(aud.sources || []).map((s: string) => (
+                        <span
+                          key={s}
+                          style={{
+                            background: "var(--chip-bg)",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            color: "var(--text-secondary)",
+                            border: "1px solid var(--border-subtle)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Source: {s}
+                        </span>
+                      ))}
+                      {aud.filters?.country && (
+                        <span
+                          style={{
+                            background: "var(--chip-bg)",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            color: "var(--text-secondary)",
+                            border: "1px solid var(--border-subtle)",
+                          }}
+                        >
+                          Country: {aud.filters.country}
+                        </span>
+                      )}
+                      {aud.filters?.category && (
+                        <span
+                          style={{
+                            background: "var(--chip-bg)",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            color: "var(--text-secondary)",
+                            border: "1px solid var(--border-subtle)",
+                          }}
+                        >
+                          Category: {aud.filters.category}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action Buttons Toolbar */}
                   <div

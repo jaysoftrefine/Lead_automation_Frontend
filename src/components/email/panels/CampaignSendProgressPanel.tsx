@@ -158,7 +158,7 @@ export function CampaignSendProgressPanel({
                 👥 Target:{" "}
                 <strong style={{ color: "var(--accent-emerald)" }}>
                   {selectedContacts.length > 0
-                    ? `${selectedContacts.length} handpicked contacts`
+                    ? `${selectedContacts.length} selected contacts`
                     : estimatedRecipients !== null
                     ? `~${estimatedRecipients} recipients`
                     : "Calculated at dispatch"}

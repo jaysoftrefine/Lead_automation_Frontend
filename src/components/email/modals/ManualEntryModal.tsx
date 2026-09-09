@@ -301,18 +301,6 @@ export function ManualEntryModal({
                   >
                     <Briefcase style={{ width: "20px", height: "20px" }} />
                   </div>
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      background: "rgba(6, 182, 212, 0.12)",
-                      color: "var(--accent-cyan)",
-                    }}
-                  >
-                    SQLite Leads
-                  </span>
                 </div>
 
                 <h3
@@ -403,18 +391,6 @@ export function ManualEntryModal({
                   >
                     <Building2 style={{ width: "20px", height: "20px" }} />
                   </div>
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      background: "rgba(16, 185, 129, 0.12)",
-                      color: "var(--accent-emerald)",
-                    }}
-                  >
-                    EU Startups DB
-                  </span>
                 </div>
 
                 <h3
@@ -815,7 +791,7 @@ export function ManualEntryModal({
                 background: "linear-gradient(135deg, #06b6d4, #3b82f6)",
               }}
             >
-              {submittingJob ? "Saving to DB..." : "Save Lead to Database"}
+              {submittingJob ? "Saving..." : "Save"}
             </button>
           </div>
         </form>
@@ -1097,7 +1073,7 @@ export function ManualEntryModal({
               background: "linear-gradient(135deg, #10b981, #06b6d4)",
             }}
           >
-            {submittingStartup ? "Saving..." : "Save Startup to DB"}
+            {submittingStartup ? "Saving..." : "Save"}
           </button>
         </div>
       </form>

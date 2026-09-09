@@ -153,7 +153,7 @@ export function RecipientPickerModal({
       }
       subtitle={
         target === "audience"
-          ? "Handpick specific companies and contacts from EU Startups and LinkedIn Leads to add directly into this audience."
+          ? "Select specific companies and contacts from EU Startups and LinkedIn Leads to add directly into this audience."
           : "Choose exactly which contacts from EU Startups and LinkedIn Leads should receive this campaign."
       }
       icon={
