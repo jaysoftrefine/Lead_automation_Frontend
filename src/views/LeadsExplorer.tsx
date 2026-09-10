@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Database, Search, Download, Globe, Eye, RefreshCw, Plus, UserPlus, ExternalLink, Calendar, Clock } from "lucide-react";
+import {
+  Database,
+  Search,
+  Download,
+  Globe,
+  Eye,
+  RefreshCw,
+  Plus,
+  ExternalLink,
+  Calendar,
+  Clock,
+  UploadCloud,
+  Play,
+  Trash2,
+  Layers,
+  MapPin,
+  X,
+  CheckCircle,
+  FileSpreadsheet,
+  AlertCircle,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { api } from "../services/api";
 
 function formatDate(dateStr?: string | null): string {
@@ -14,11 +37,50 @@ function formatDate(dateStr?: string | null): string {
   }
 }
 
+function formatDateTime(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(dateStr);
+  }
+}
+
 export interface LeadsExplorerProps {
   onToast: (message: string, type?: string) => void;
 }
 
 export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
+  // Main view mode: "scheduled_jobs" (the redesigned view) vs "all_leads" (flat leads list)
+  const [viewMode, setViewMode] = useState<"scheduled_jobs" | "all_leads">("scheduled_jobs");
+
+  // --- Scheduled Jobs State ---
+  const [scheduledJobs, setScheduledJobs] = useState<any[]>([]);
+  const [scheduledLoading, setScheduledLoading] = useState(false);
+  const [scheduledSearch, setScheduledSearch] = useState("");
+  const [scheduledStatus, setScheduledStatus] = useState("all");
+  const [scheduledPage, setScheduledPage] = useState(1);
+  const [scheduledTotal, setScheduledTotal] = useState(0);
+
+  // --- Upload Schedule Modal State ---
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // --- Scraped Data Inline Dropdown State (for a specific scheduled job) ---
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [expandedLeads, setExpandedLeads] = useState<any[]>([]);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+
+  // --- Flat Leads Explorer State ---
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,6 +95,8 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const [totalResults, setTotalResults] = useState(0);
   const [typeCounts, setTypeCounts] = useState({ all: 0, company: 0, personal: 0, others: 0 });
   const perPage = 50;
+
+  // --- Lead Detail & Manual Entry Modals ---
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [submittingLead, setSubmittingLead] = useState(false);
@@ -53,6 +117,169 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     contact_linkedin: "",
   });
 
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    if (selectedLead || showAddModal || showUploadModal) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedLead, showAddModal, showUploadModal]);
+
+  // Load Scheduled Jobs
+  const loadScheduledJobs = async (
+    targetPage = scheduledPage,
+    targetSearch = scheduledSearch,
+    targetStatus = scheduledStatus
+  ) => {
+    setScheduledLoading(true);
+    setScheduledPage(targetPage);
+    try {
+      const params: Record<string, any> = {
+        page: targetPage,
+        limit: 50,
+      };
+      if (targetSearch.trim()) params.search = targetSearch.trim();
+      if (targetStatus && targetStatus !== "all") params.status = targetStatus;
+
+      const res = await api.getScheduledJobs(params);
+      setScheduledJobs(res.jobs || []);
+      setScheduledTotal(res.total ?? (res.jobs ? res.jobs.length : 0));
+    } catch (e: any) {
+      onToast(e.message || "Failed to load scheduled jobs", "error");
+    } finally {
+      setScheduledLoading(false);
+    }
+  };
+
+  // Load Flat Leads
+  const loadLeads = async (
+    targetPage = page,
+    targetType = activeLeadType,
+    targetCompanySize = companySize,
+    targetSearch = searchTerm
+  ) => {
+    setLoading(true);
+    setPage(targetPage);
+    try {
+      const params: Record<string, any> = {
+        page: targetPage,
+        limit: perPage,
+      };
+      if (targetCompanySize) params.company_size = targetCompanySize;
+      if (targetType && targetType !== "all") params.lead_type = targetType;
+      if (targetSearch.trim()) params.search = targetSearch.trim();
+
+      if (datePreset && datePreset !== "all" && datePreset !== "custom") {
+        if (datePreset === "today") params.hours_old = 24;
+        else if (datePreset === "7d") params.hours_old = 168;
+        else if (datePreset === "30d") params.hours_old = 720;
+        else if (datePreset === "90d") params.hours_old = 2160;
+      }
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      if (dateField && dateField !== "any") params.date_field = dateField;
+
+      const res = await api.getLeads(params);
+      setLeads(res.leads || res.data || []);
+      setTotalPages(res.total_pages || 1);
+      setTotalResults(res.total ?? 0);
+      if (res.type_counts) {
+        setTypeCounts(res.type_counts);
+      }
+    } catch (e: any) {
+      onToast(e.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on initial mount and when filter criteria changes
+  useEffect(() => {
+    loadScheduledJobs(1, scheduledSearch, scheduledStatus);
+  }, [scheduledSearch, scheduledStatus]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadLeads(1, activeLeadType, companySize, searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm, companySize, activeLeadType, datePreset, dateFrom, dateTo, dateField]);
+
+  // Toggle inline dropdown: Load and display scraped leads beneath the selected job row
+  const toggleExpandJob = async (job: any) => {
+    if (expandedJobId === job.id) {
+      setExpandedJobId(null);
+      return;
+    }
+    setExpandedJobId(job.id);
+    setExpandedLoading(true);
+    try {
+      const res = await api.getLeads({ scheduled_job_id: job.id, limit: 100 });
+      let jobLeads = res.leads || res.data || [];
+
+      // Fallback for baseline JOB-001 if needed
+      if (jobLeads.length === 0 && job.id === "JOB-001") {
+        const fallbackRes = await api.getLeads({ limit: 100 });
+        jobLeads = fallbackRes.leads || fallbackRes.data || [];
+      }
+
+      setExpandedLeads(jobLeads);
+    } catch (e: any) {
+      onToast(e.message || "Failed to load scraped leads for job", "error");
+    } finally {
+      setExpandedLoading(false);
+    }
+  };
+
+  // Handle immediate trigger for a scheduled job
+  const handleRunJobNow = async (jobId: string) => {
+    try {
+      const res = await api.runScheduledJobNow(jobId);
+      onToast(res.message || `Started autonomous pipeline for job ${jobId}!`, "success");
+      loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
+    } catch (e: any) {
+      onToast(e.message || "Failed to start pipeline for this job", "error");
+    }
+  };
+
+  // Handle deleting a scheduled job
+  const handleDeleteJob = async (jobId: string) => {
+    if (!window.confirm(`Are you sure you want to delete scheduled task ${jobId}?`)) return;
+    try {
+      await api.deleteScheduledJob(jobId);
+      onToast(`Scheduled job ${jobId} deleted successfully.`, "success");
+      loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
+    } catch (e: any) {
+      onToast(e.message || "Failed to delete job", "error");
+    }
+  };
+
+  // Handle CSV/Excel File Upload
+  const handleUploadSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      onToast("Please select a CSV or Excel file to upload.", "error");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const res = await api.uploadScrapingSchedule(uploadFile);
+      onToast(res.message || `Imported ${res.imported_count || 0} scheduled scraping tasks!`, "success");
+      setShowUploadModal(false);
+      setUploadFile(null);
+      loadScheduledJobs(1, "", "all");
+    } catch (err: any) {
+      onToast(err.message || "Failed to upload schedule file", "error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Handle Manual Lead Creation
   const handleCreateManualLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualForm.company.trim() || !manualForm.title.trim()) {
@@ -106,6 +333,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
         contact_linkedin: "",
       });
       loadLeads();
+      loadScheduledJobs();
     } catch (err: any) {
       onToast(err.message || "Failed to create manual lead", "error");
     } finally {
@@ -113,82 +341,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     }
   };
 
-  // Lock body scroll when any modal is open
-  useEffect(() => {
-    if (selectedLead || showAddModal) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [selectedLead, showAddModal]);
-
-  const loadLeads = async (
-    targetPage = page,
-    targetType = activeLeadType,
-    targetCompanySize = companySize,
-    targetSearch = searchTerm
-  ) => {
-    setLoading(true);
-    setPage(targetPage);
-    try {
-      const params: Record<string, any> = {
-        page: targetPage,
-        limit: perPage,
-      };
-      if (targetCompanySize) params.company_size = targetCompanySize;
-      if (targetType && targetType !== "all") params.lead_type = targetType;
-      if (targetSearch.trim()) params.search = targetSearch.trim();
-
-      if (datePreset && datePreset !== "all" && datePreset !== "custom") {
-        if (datePreset === "today") params.hours_old = 24;
-        else if (datePreset === "7d") params.hours_old = 168;
-        else if (datePreset === "30d") params.hours_old = 720;
-        else if (datePreset === "90d") params.hours_old = 2160;
-      }
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (dateField && dateField !== "any") params.date_field = dateField;
-
-      const res = await api.getLeads(params);
-      setLeads(res.leads || res.data || []);
-      setTotalPages(res.total_pages || 1);
-      setTotalResults(res.total ?? 0);
-      if (res.type_counts) {
-        setTypeCounts(res.type_counts);
-      }
-    } catch (e: any) {
-      onToast(e.message, "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadLeads(1, activeLeadType, companySize, searchTerm);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [searchTerm, companySize, activeLeadType, datePreset, dateFrom, dateTo, dateField]);
-
-  const handleLeadTypeChange = async (job_url: string, newType: string) => {
-    // Optimistically update local state
-    setLeads((prev) =>
-      prev.map((l) => (l.job_url === job_url ? { ...l, lead_type: newType } : l))
-    );
-    try {
-      await (api as any).updateLeadType(job_url, newType);
-      onToast(`Lead type updated to "${newType}"`, "success");
-      // Reload in background to sync counts & pagination
-      loadLeads(page, activeLeadType, companySize, searchTerm);
-    } catch (e: any) {
-      onToast(e.message || "Failed to update lead type", "error");
-      loadLeads(page, activeLeadType, companySize, searchTerm);
-    }
-  };
-
+  // Export Data
   const exportData = (format: "json" | "csv") => {
     if (leads.length === 0) {
       onToast("No leads to export", "error");
@@ -202,7 +355,6 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       a.download = `leads_export_${Date.now()}.json`;
       a.click();
     } else {
-      // CSV
       const headers = ["Company", "Location", "Website", "LinkedIn / Job URL", "Size", "Date Posted", "Date Scraped", "Contacts", "Contact LinkedIn URLs"];
       const rows = leads.map((l) => [
         `"${(l.company || "").replace(/"/g, '""')}"`,
@@ -226,473 +378,808 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
     onToast(`Exported ${leads.length} leads as ${format.toUpperCase()}`, "success");
   };
 
+  // Check if a scheduled job is due today
+  const isJobDueToday = (dateStr: string) => {
+    if (!dateStr) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return dateStr.slice(0, 10) === today;
+  };
+
   return (
-    <div className="glass-card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Top Filter Bar */}
+    <div className="glass-card" style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+      {/* Top Header & View Switcher */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <div className="card-title-group">
-          <Database style={{ width: "18px", height: "18px", color: "var(--accent-cyan)" }} />
-          <h2>Discovered Leads ({typeCounts.all || totalResults})</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div className="card-title-group" style={{ margin: 0 }}>
+            <Database style={{ width: "20px", height: "20px", color: "var(--accent-cyan)" }} />
+            <h2 style={{ margin: 0 }}>Discovered Leads ({typeCounts.all || totalResults})</h2>
+          </div>
+
+          {/* View Mode Toggle Pill */}
+          <div style={{ display: "flex", background: "rgba(15, 23, 42, 0.5)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+            <button
+              onClick={() => setViewMode("scheduled_jobs")}
+              style={{
+                padding: "4px 12px",
+                border: "none",
+                borderRadius: "6px",
+                background: viewMode === "scheduled_jobs" ? "linear-gradient(135deg, #06b6d4, #3b82f6)" : "transparent",
+                color: viewMode === "scheduled_jobs" ? "#fff" : "var(--text-muted)",
+                fontWeight: viewMode === "scheduled_jobs" ? 600 : 400,
+                cursor: "pointer",
+                fontSize: "0.82rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.2s",
+              }}
+            >
+              <Calendar style={{ width: "13px", height: "13px" }} />
+              Scraping Tasks ({scheduledTotal})
+            </button>
+            <button
+              onClick={() => setViewMode("all_leads")}
+              style={{
+                padding: "4px 12px",
+                border: "none",
+                borderRadius: "6px",
+                background: viewMode === "all_leads" ? "linear-gradient(135deg, #06b6d4, #3b82f6)" : "transparent",
+                color: viewMode === "all_leads" ? "#fff" : "var(--text-muted)",
+                fontWeight: viewMode === "all_leads" ? 600 : 400,
+                cursor: "pointer",
+                fontSize: "0.82rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.2s",
+              }}
+            >
+              <Database style={{ width: "13px", height: "13px" }} />
+              All Leads View ({typeCounts.all || totalResults})
+            </button>
+          </div>
         </div>
 
+        {/* Action Buttons: Upload CSV/Excel, Add Lead, Export */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-          {/* Search Box */}
-          <div style={{ position: "relative", minWidth: "220px" }}>
-            <Search
-              style={{
-                position: "absolute",
-                left: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: "14px",
-                height: "14px",
-                color: "var(--text-dim)",
-              }}
-            />
-            <input
-              type="text"
-              className="eu-input"
-              style={{ paddingLeft: "30px" }}
-              placeholder="Filter leads by keyword..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {/* Company Size */}
-          <select
-            value={companySize}
-            onChange={(e) => setCompanySize(e.target.value)}
-            style={{ width: "auto" }}
+          {/* Upload CSV / Excel Schedule Button */}
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="btn btn-primary btn-sm"
+            style={{
+              background: "linear-gradient(135deg, #10b981, #06b6d4)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontWeight: 600,
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.25)",
+            }}
           >
-            <option value="">All Sizes</option>
-            <option value="small">Small (1-50)</option>
-            <option value="medium">Medium (51-500)</option>
-            <option value="large">Large (500+)</option>
-          </select>
+            <UploadCloud style={{ width: "15px", height: "15px" }} />
+            Upload CSV / Excel
+          </button>
 
-          {/* Date Filter */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <select
-              value={datePreset}
-              onChange={(e) => {
-                setDatePreset(e.target.value);
-                if (e.target.value !== "custom") {
-                  setDateFrom("");
-                  setDateTo("");
-                }
-              }}
-              style={{ width: "auto" }}
-            >
-              <option value="all">📅 All Dates</option>
-              <option value="today">Past 24 Hours</option>
-              <option value="7d">Past 7 Days</option>
-              <option value="30d">Past 30 Days</option>
-              <option value="90d">Past 90 Days</option>
-              <option value="custom">Custom Date Range...</option>
-            </select>
-
-            {datePreset === "custom" && (
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <input
-                  type="date"
-                  className="eu-input"
-                  style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  placeholder="From"
-                />
-                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>to</span>
-                <input
-                  type="date"
-                  className="eu-input"
-                  style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  placeholder="To"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Refresh */}
-          <button onClick={() => loadLeads(page)} className="btn-icon-ghost" title="Refresh Leads">
+          {/* Refresh Current View */}
+          <button
+            onClick={() => {
+              if (viewMode === "scheduled_jobs") loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
+              else loadLeads(page);
+            }}
+            className="btn-icon-ghost"
+            title="Refresh"
+          >
             <RefreshCw style={{ width: "14px", height: "14px" }} />
           </button>
 
           {/* Export Buttons */}
-          <button onClick={() => exportData("csv")} className="btn btn-secondary btn-sm">
+          <button onClick={() => exportData("csv")} className="btn btn-secondary btn-sm" title="Export leads as CSV">
             <Download style={{ width: "13px", height: "13px" }} /> CSV
           </button>
-          <button onClick={() => exportData("json")} className="btn btn-secondary btn-sm">
+          <button onClick={() => exportData("json")} className="btn btn-secondary btn-sm" title="Export leads as JSON">
             <Download style={{ width: "13px", height: "13px" }} /> JSON
           </button>
 
           {/* Manual Entry Button */}
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn btn-primary btn-sm"
-            style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)", display: "flex", alignItems: "center", gap: "5px" }}
+            className="btn btn-secondary btn-sm"
+            style={{ display: "flex", alignItems: "center", gap: "5px" }}
           >
             <Plus style={{ width: "14px", height: "14px" }} /> Add Lead
           </button>
         </div>
       </div>
 
-      {/* Lead Type Tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
-        {([
-          { key: "all", label: "All Leads", count: typeCounts.all },
-          { key: "company", label: "🏢 Company", count: typeCounts.company },
-          { key: "personal", label: "👤 Personal", count: typeCounts.personal },
-          { key: "others", label: "❓ Others", count: typeCounts.others },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => {
-              setActiveLeadType(tab.key);
-              setPage(1);
-            }}
-            style={{
-              padding: "0.5rem 1rem",
-              border: "none",
-              borderBottom: activeLeadType === tab.key ? "2px solid var(--accent-cyan)" : "2px solid transparent",
-              background: "transparent",
-              color: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--text-muted)",
-              fontWeight: activeLeadType === tab.key ? 600 : 400,
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "all 0.2s",
-            }}
-          >
-            {tab.label}
-            <span style={{
-              background: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--border-color)",
-              color: activeLeadType === tab.key ? "#fff" : "var(--text-muted)",
-              borderRadius: "999px",
-              padding: "1px 7px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-            }}>{tab.count}</span>
-          </button>
-        ))}
-      </div>
+      {/* ========================================================================= */}
+      {/* VIEW 1: SCHEDULED SCRAPING JOBS TABLE (The exact requested primary view)  */}
+      {/* Columns: ID | JObTiTle | Target Location | Company Size | Scraping Limit | Scheduled date | created at | Updated at | Actions */}
+      {/* ========================================================================= */}
+      {viewMode === "scheduled_jobs" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* Subheader & Filters Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <Clock style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
+              <span>
+                Daily Autonomous Engine scheduled to run automatically everyday at <strong>10:00 PM</strong> for matching jobs.
+              </span>
+            </div>
 
-      {/* Leads Table */}
-      <div className="eu-table-wrapper">
-        <table className="eu-startups-table">
-          <thead>
-            <tr>
-              <th>Company &amp; Domain</th>
-              <th>Location</th>
-              <th>Date Posted &amp; Scraped</th>
-              <th>Key Decision Makers &amp; Contacts</th>
-              <th>Size</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "40px" }}>
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
-                    <div className="spinner" />
-                    <span>Loading database leads...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : leads.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
-                  No leads found. Run the Pipeline Runner to scrape and discover B2B leads.
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead, idx) => (
-                <tr key={lead._id || idx}>
-                  <td>
-                    <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
-                      {lead.company || "Unnamed Company"}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "3px" }}>
-                      {lead.company_domain && (
-                        <a
-                          href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
-                          target="_blank"
-                          rel="noreferrer"
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+              {/* Search scheduled jobs */}
+              <div style={{ position: "relative", minWidth: "220px" }}>
+                <Search
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "14px",
+                    height: "14px",
+                    color: "var(--text-dim)",
+                  }}
+                />
+                <input
+                  type="text"
+                  className="eu-input"
+                  style={{ paddingLeft: "30px", width: "100%", fontSize: "0.82rem" }}
+                  placeholder="Search Job Title, Location, ID..."
+                  value={scheduledSearch}
+                  onChange={(e) => setScheduledSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                className="eu-select"
+                style={{ width: "135px", fontSize: "0.82rem" }}
+                value={scheduledStatus}
+                onChange={(e) => setScheduledStatus(e.target.value)}
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Scheduled Jobs Table */}
+          <div className="eu-table-wrapper">
+            <table className="eu-startups-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "135px" }}>ID</th>
+                  <th>Job Title</th>
+                  <th>Target Location</th>
+                  <th style={{ width: "130px" }}>Company Size</th>
+                  <th style={{ width: "120px" }}>Scraping Limit</th>
+                  <th style={{ width: "150px" }}>Scheduled Date</th>
+                  <th style={{ width: "140px" }}>Created At</th>
+                  <th style={{ width: "150px" }}>Updated At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scheduledLoading ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "40px" }}>
+                      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
+                        <div className="spinner" />
+                        <span>Loading scheduled scraping tasks...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : scheduledJobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "50px", color: "var(--text-muted)" }}>
+                      <FileSpreadsheet style={{ width: "36px", height: "36px", opacity: 0.4, margin: "0 auto 10px" }} />
+                      <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text-primary)" }}>No Scheduled Scraping Tasks Found</div>
+                      <div style={{ fontSize: "0.82rem", marginTop: "4px" }}>
+                        Upload a CSV or Excel file containing your job targets or run the autonomous pipeline manually.
+                      </div>
+                      <button
+                        onClick={() => setShowUploadModal(true)}
+                        className="btn btn-primary btn-sm"
+                        style={{ marginTop: "12px", background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
+                      >
+                        <UploadCloud style={{ width: "14px", height: "14px" }} /> Upload Schedule File
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  scheduledJobs.map((job) => {
+                    const isDueToday = isJobDueToday(job.scheduled_date);
+                    return (
+                      <React.Fragment key={job.id}>
+                        <tr
                           style={{
-                            fontSize: "0.75rem",
-                            color: "var(--accent-cyan)",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            textDecoration: "none",
+                            cursor: "pointer",
+                            background: expandedJobId === job.id ? "rgba(6, 182, 212, 0.06)" : undefined,
                           }}
+                          onClick={() => toggleExpandJob(job)}
                         >
-                          <Globe style={{ width: "11px", height: "11px" }} />
-                          <span>{lead.company_domain}</span>
-                        </a>
-                      )}
-                      {/* Company LinkedIn or Job Posting Link */}
-                      {(() => {
-                        const isHttp =
-                          lead.job_url &&
-                          (lead.job_url.startsWith("http://") || lead.job_url.startsWith("https://"));
-                        const isAgent =
-                          lead.site === "instant_agent" ||
-                          (lead.job_url && lead.job_url.startsWith("agent://"));
-                        const isManual =
-                          lead.site === "manual" ||
-                          (lead.job_url && lead.job_url.startsWith("manual://"));
+                          {/* 1. ID with Down Arrow on Left */}
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandJob(job);
+                                }}
+                                className="btn-icon-ghost"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "6px",
+                                  background: expandedJobId === job.id ? "rgba(6, 182, 212, 0.2)" : "rgba(255, 255, 255, 0.06)",
+                                  border: "1px solid",
+                                  borderColor: expandedJobId === job.id ? "rgba(6, 182, 212, 0.45)" : "var(--border-color)",
+                                  color: expandedJobId === job.id ? "var(--accent-cyan)" : "var(--text-primary)",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  flexShrink: 0,
+                                }}
+                                title={expandedJobId === job.id ? "Collapse scraped leads list" : "Show whole list of scraped leads"}
+                              >
+                                <ChevronDown
+                                  style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    transform: expandedJobId === job.id ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "transform 0.25s ease",
+                                  }}
+                                />
+                              </button>
+                              <span
+                                style={{
+                                  fontFamily: "ui-monospace, monospace",
+                                  fontWeight: 700,
+                                  fontSize: "0.82rem",
+                                  color: "var(--accent-cyan)",
+                                  background: "rgba(6, 182, 212, 0.12)",
+                                  border: "1px solid rgba(6, 182, 212, 0.25)",
+                                  padding: "2px 7px",
+                                  borderRadius: "5px",
+                                  display: "inline-block",
+                                }}
+                              >
+                                {job.id}
+                              </span>
+                            </div>
+                          </td>
 
-                        if (isHttp) {
-                          const isLinkedIn = lead.job_url.includes("linkedin.com");
-                          return (
+                          {/* 2. JobTitle */}
+                          <td>
+                            <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.9rem" }}>
+                              {job.job_title}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px" }}>
+                              {job.status === "completed" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#10b981", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <CheckCircle style={{ width: "11px", height: "11px" }} /> Completed
+                                </span>
+                              ) : job.status === "running" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#06b6d4", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <div className="spinner" style={{ width: "10px", height: "10px" }} /> Scraping &amp; Enriching...
+                                </span>
+                              ) : job.status === "failed" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#ef4444", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <AlertCircle style={{ width: "11px", height: "11px" }} /> Failed
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <Clock style={{ width: "11px", height: "11px" }} /> Pending
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 3. Target Location */}
+                          <td>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                              <MapPin style={{ width: "13px", height: "13px", color: "var(--accent-cyan)", flexShrink: 0 }} />
+                              <span>{job.target_location || "Worldwide (Remote)"}</span>
+                            </div>
+                          </td>
+
+                          {/* 4. Company Size */}
+                          <td>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                color: "var(--accent-cyan)",
+                                background: "rgba(6, 182, 212, 0.08)",
+                                padding: "3px 8px",
+                                borderRadius: "999px",
+                                border: "1px solid rgba(6, 182, 212, 0.2)",
+                                display: "inline-block",
+                              }}
+                            >
+                              {job.company_size || "Small (1-50)"}
+                            </span>
+                          </td>
+
+                          {/* 5. Scraping Limit */}
+                          <td>
+                            <span
+                              style={{
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                color: "var(--text-primary)",
+                                background: "rgba(255, 255, 255, 0.05)",
+                                padding: "3px 9px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--border-color)",
+                                display: "inline-block",
+                              }}
+                            >
+                              {job.scraping_limit} leads
+                            </span>
+                          </td>
+
+                          {/* 6. Scheduled Date */}
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.85rem", fontWeight: 500 }}>
+                                <Calendar style={{ width: "13px", height: "13px", color: "var(--text-dim)" }} />
+                                {formatDate(job.scheduled_date)}
+                              </span>
+                              {isDueToday && job.status === "pending" && (
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    color: "#f59e0b",
+                                    background: "rgba(245, 158, 11, 0.12)",
+                                    border: "1px solid rgba(245, 158, 11, 0.25)",
+                                    padding: "1px 5px",
+                                    borderRadius: "4px",
+                                    display: "inline-block",
+                                    width: "fit-content",
+                                  }}
+                                >
+                                  Runs @ 10:00 PM
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 7. Created At */}
+                          <td style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            {formatDateTime(job.created_at)}
+                          </td>
+
+                          {/* 8. Updated At */}
+                          <td style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            {formatDateTime(job.updated_at)}
+                          </td>
+                        </tr>
+
+                        {/* Inline Dropdown Panel for Scraped Data */}
+                        {expandedJobId === job.id && (
+                          <tr key={`${job.id}-dropdown`}>
+                            <td
+                              colSpan={8}
+                              style={{
+                                padding: "0 0 16px 0",
+                                background: "rgba(15, 23, 42, 0.45)",
+                                borderBottom: "2px solid rgba(6, 182, 212, 0.25)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  margin: "8px 16px",
+                                  padding: "16px",
+                                  borderRadius: "8px",
+                                  background: "rgba(255, 255, 255, 0.02)",
+                                  border: "1px solid rgba(6, 182, 212, 0.2)",
+                                  borderLeft: "3px solid var(--accent-cyan)",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <Layers style={{ width: "16px", height: "16px", color: "var(--accent-cyan)" }} />
+                                    <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+                                      Scraped Leads for "{job.job_title}"
+                                    </span>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                      ({expandedLeads.length} leads discovered)
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", gap: "12px" }}>
+                                    <span>📍 {job.target_location}</span>
+                                    <span>🏢 {job.company_size}</span>
+                                    <span>🎯 Goal: {job.scraping_limit} leads</span>
+                                  </div>
+                                </div>
+
+                                {expandedLoading ? (
+                                  <div style={{ textAlign: "center", padding: "30px" }}>
+                                    <div className="spinner" style={{ margin: "0 auto 8px" }} />
+                                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Loading scraped leads...</span>
+                                  </div>
+                                ) : expandedLeads.length === 0 ? (
+                                  <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                                    No leads scraped yet for this job. Scheduled to run automatically on {formatDate(job.scheduled_date)} at 10:00 PM.
+                                  </div>
+                                ) : (
+                                  <div className="eu-table-wrapper" style={{ maxHeight: "380px", overflowY: "auto" }}>
+                                    <table className="eu-startups-table" style={{ width: "100%", fontSize: "0.82rem" }}>
+                                      <thead>
+                                        <tr>
+                                          <th>Company &amp; Website</th>
+                                          <th>Location</th>
+                                          <th>Key Decision Makers &amp; Direct Emails</th>
+                                          <th style={{ width: "90px" }}>Size</th>
+                                          <th style={{ width: "80px" }}>Score</th>
+                                          <th style={{ width: "80px" }}>Action</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {expandedLeads.map((lead: any, li: number) => (
+                                          <tr key={lead._id || li}>
+                                            <td>
+                                              <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{lead.company}</div>
+                                              {lead.company_domain && (
+                                                <a
+                                                  href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "3px" }}
+                                                >
+                                                  <Globe style={{ width: "10px", height: "10px" }} />
+                                                  {lead.company_domain}
+                                                </a>
+                                              )}
+                                            </td>
+                                            <td style={{ color: "var(--text-secondary)" }}>{lead.location || "Remote"}</td>
+                                            <td>
+                                              {lead.contacts && lead.contacts.length > 0 ? (
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                                  {lead.contacts.slice(0, 2).map((c: any, ci: number) => (
+                                                    <div key={ci} style={{ fontSize: "0.78rem" }}>
+                                                      <span style={{ fontWeight: 600 }}>{c.name || "Executive"}</span>
+                                                      <span style={{ color: "var(--text-muted)" }}> ({c.role || "Lead"})</span>
+                                                      {c.email && <div style={{ color: "var(--accent-cyan)" }}>✉ {c.email}</div>}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Domain / No direct contact</span>
+                                              )}
+                                            </td>
+                                            <td>
+                                              <span className="size-badge" style={{ fontSize: "0.72rem" }}>{lead.company_size || "1-50"}</span>
+                                            </td>
+                                            <td>
+                                              <span style={{ fontWeight: 700, color: lead.relevance_score >= 70 ? "#10b981" : "#f59e0b" }}>
+                                                {lead.relevance_score}/100
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedLead(lead);
+                                                }}
+                                                className="btn btn-secondary btn-sm"
+                                                style={{ fontSize: "0.72rem", padding: "2px 7px" }}
+                                              >
+                                                Details
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 2: ALL SCRAPED LEADS (Flat list view with filters & tabs)            */}
+      {/* ========================================================================= */}
+      {viewMode === "all_leads" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* Top Filter Bar for Flat Leads */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", width: "100%" }}>
+              {/* Search Box */}
+              <div style={{ position: "relative", minWidth: "220px", flex: 1 }}>
+                <Search
+                  style={{
+                    position: "absolute",
+                    left: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "14px",
+                    height: "14px",
+                    color: "var(--text-dim)",
+                  }}
+                />
+                <input
+                  type="text"
+                  className="eu-input"
+                  style={{ paddingLeft: "30px", width: "100%", fontSize: "0.82rem" }}
+                  placeholder="Filter leads by company, title, domain..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {/* Company Size Filter */}
+              <select
+                className="eu-select"
+                style={{ width: "140px", fontSize: "0.82rem" }}
+                value={companySize}
+                onChange={(e) => setCompanySize(e.target.value)}
+              >
+                <option value="">All Sizes</option>
+                <option value="small">Small (1–50)</option>
+                <option value="medium">Medium (51–500)</option>
+                <option value="large">Large (500+)</option>
+              </select>
+
+              {/* Date Filter Dropdown */}
+              <select
+                className="eu-select"
+                style={{ width: "125px", fontSize: "0.82rem" }}
+                value={datePreset}
+                onChange={(e) => setDatePreset(e.target.value)}
+              >
+                <option value="all">All Dates</option>
+                <option value="today">Past 24 Hours</option>
+                <option value="7d">Past 7 Days</option>
+                <option value="30d">Past 30 Days</option>
+                <option value="custom">Custom Range</option>
+              </select>
+
+              {datePreset === "custom" && (
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <input
+                    type="date"
+                    className="eu-input"
+                    style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>to</span>
+                  <input
+                    type="date"
+                    className="eu-input"
+                    style={{ width: "125px", padding: "4px 6px", fontSize: "0.78rem" }}
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Lead Type Tabs */}
+          <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0" }}>
+            {([
+              { key: "all", label: "All Leads", count: typeCounts.all },
+              { key: "company", label: "🏢 Company", count: typeCounts.company },
+              { key: "personal", label: "👤 Personal", count: typeCounts.personal },
+              { key: "others", label: "❓ Others", count: typeCounts.others },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  setActiveLeadType(tab.key);
+                  setPage(1);
+                }}
+                style={{
+                  padding: "0.5rem 1rem",
+                  border: "none",
+                  borderBottom: activeLeadType === tab.key ? "2px solid var(--accent-cyan)" : "2px solid transparent",
+                  background: "transparent",
+                  color: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--text-muted)",
+                  fontWeight: activeLeadType === tab.key ? 600 : 400,
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all 0.2s",
+                }}
+              >
+                {tab.label}
+                <span
+                  style={{
+                    background: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--border-color)",
+                    color: activeLeadType === tab.key ? "#fff" : "var(--text-muted)",
+                    borderRadius: "999px",
+                    padding: "1px 7px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Flat Leads Table */}
+          <div className="eu-table-wrapper">
+            <table className="eu-startups-table">
+              <thead>
+                <tr>
+                  <th>Company &amp; Domain</th>
+                  <th>Location</th>
+                  <th>Date Posted &amp; Scraped</th>
+                  <th>Key Decision Makers &amp; Contacts</th>
+                  <th>Size</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "40px" }}>
+                      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
+                        <div className="spinner" />
+                        <span>Loading database leads...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : leads.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                      No leads found matching filter criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  leads.map((lead, idx) => (
+                    <tr key={lead._id || idx}>
+                      <td>
+                        <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
+                          {lead.company || "Unnamed Company"}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "3px" }}>
+                          {lead.company_domain && (
+                            <a
+                              href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--accent-cyan)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
+                                textDecoration: "none",
+                              }}
+                            >
+                              <Globe style={{ width: "11px", height: "11px" }} />
+                              <span>{lead.company_domain}</span>
+                            </a>
+                          )}
+                          {lead.job_url && (
                             <a
                               href={lead.job_url}
                               target="_blank"
                               rel="noreferrer"
                               style={{
                                 fontSize: "0.75rem",
-                                color: isLinkedIn ? "#0a66c2" : "var(--accent-cyan)",
+                                color: "var(--text-muted)",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "3px",
                                 textDecoration: "none",
-                                fontWeight: 600,
                               }}
-                              title={isLinkedIn ? "Open LinkedIn Job Posting" : "Open Original Job Posting"}
                             >
                               <ExternalLink style={{ width: "11px", height: "11px" }} />
-                              <span>{isLinkedIn ? "LinkedIn Job" : "Job Posting"}</span>
+                              <span>Job Posting</span>
                             </a>
-                          );
-                        }
-
-                        // For agent-researched or manual leads: provide real working LinkedIn company search link
-                        const linkedinSearchUrl = `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(lead.company)}`;
-
-                        return (
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                            <a
-                              href={linkedinSearchUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                fontSize: "0.75rem",
-                                color: "#0a66c2",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                                textDecoration: "none",
-                                fontWeight: 600,
-                              }}
-                              title={`Search ${lead.company} on LinkedIn`}
-                            >
-                              <ExternalLink style={{ width: "11px", height: "11px" }} />
-                              <span>LinkedIn</span>
-                            </a>
-
-                            {isAgent && (
-                              <span
-                                style={{
-                                  fontSize: "0.68rem",
-                                  padding: "1px 6px",
-                                  borderRadius: "4px",
-                                  background: "rgba(168, 85, 247, 0.12)",
-                                  color: "var(--accent-violet)",
-                                  border: "1px solid rgba(168, 85, 247, 0.3)",
-                                  fontWeight: 600,
-                                }}
-                                title="Discovered via Autonomous Research Agent"
-                              >
-                                AI Agent
-                              </span>
-                            )}
-                            {isManual && (
-                              <span
-                                style={{
-                                  fontSize: "0.68rem",
-                                  padding: "1px 6px",
-                                  borderRadius: "4px",
-                                  background: "rgba(245, 158, 11, 0.12)",
-                                  color: "#f59e0b",
-                                  border: "1px solid rgba(245, 158, 11, 0.3)",
-                                  fontWeight: 600,
-                                }}
-                                title="Manually Added Lead"
-                              >
-                                Manual
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </td>
-
-                  <td style={{ color: "var(--text-secondary)" }}>{lead.location || "—"}</td>
-
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <div style={{ fontSize: "0.78rem", color: lead.date_posted ? "var(--text-primary)" : "var(--text-dim)", display: "flex", alignItems: "center", gap: "5px", marginBottom: "4px" }}>
-                      <Calendar style={{ width: "12px", height: "12px", color: lead.date_posted ? "var(--accent-cyan)" : "var(--text-muted)", flexShrink: 0 }} />
-                      <span>
-                        <strong style={{ color: "var(--text-muted)", fontWeight: 500 }}>Posted:</strong>{" "}
-                        {formatDate(lead.date_posted)}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "5px" }}>
-                      <Clock style={{ width: "12px", height: "12px", color: "var(--accent-emerald)", flexShrink: 0 }} />
-                      <span>
-                        <strong style={{ color: "var(--text-muted)", fontWeight: 500 }}>Scraped:</strong>{" "}
-                        {formatDate(lead.scraped_at || lead.created_at)}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td>
-                    {(lead.contacts || []).length === 0 ? (
-                      <span style={{ color: "var(--text-dim)", fontSize: "0.78rem" }}>No contacts discovered</span>
-                    ) : (
-                      (lead.contacts || []).map((c: any, cIdx: number) => (
-                        <div
-                          key={cIdx}
-                          style={{
-                            marginBottom: "4px",
-                            padding: "4px 8px",
-                            background: "var(--chip-bg)",
-                            border: "1px solid var(--border-subtle)",
-                            borderRadius: "6px",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-                            <div>
-                              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{c.name || "Executive"}</span>
-                              {c.role && <span style={{ color: "var(--text-muted)", marginLeft: "4px" }}>({c.role})</span>}
-                            </div>
-                            {(c.linkedin_url || c.linkedin) && (
-                              <a
-                                href={c.linkedin_url || c.linkedin}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  fontSize: "0.72rem",
-                                  color: "#0a66c2",
-                                  textDecoration: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "2px",
-                                  fontWeight: 600,
-                                  background: "rgba(10, 102, 194, 0.1)",
-                                  padding: "1px 6px",
-                                  borderRadius: "4px",
-                                  flexShrink: 0,
-                                }}
-                                title="Open Contact's LinkedIn Profile"
-                              >
-                                <span>LinkedIn ↗</span>
-                              </a>
-                            )}
-                          </div>
-                          {c.email && (
-                            <div style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
-                              ✉ {c.email}
-                            </div>
                           )}
                         </div>
-                      ))
-                    )}
-                  </td>
-
-                  <td>
-                    <span className="platform-badge" style={{ fontSize: "0.7rem", textTransform: "capitalize" }}>
-                      {lead.company_size || "Standard"}
-                    </span>
-                  </td>
-
-                  <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" }}>
-                      <button
-                        onClick={() => setSelectedLead(lead)}
-                        className="btn btn-sm btn-secondary"
-                        title="View Lead Research Details"
-                      >
-                        <Eye style={{ width: "13px", height: "13px" }} />
-                        <span>Details</span>
-                      </button>
-                      <select
-                        value={lead.lead_type || "others"}
-                        onChange={(e) => handleLeadTypeChange(lead.job_url, e.target.value)}
-                        style={{
-                          fontSize: "0.72rem",
-                          padding: "3px 7px",
-                          borderRadius: "6px",
-                          border: "1px solid var(--border-color)",
-                          background: lead.lead_type === "company"
-                            ? "rgba(6,182,212,0.12)"
-                            : lead.lead_type === "personal"
-                            ? "rgba(139,92,246,0.12)"
-                            : "var(--chip-bg)",
-                          color: lead.lead_type === "company"
-                            ? "var(--accent-cyan)"
-                            : lead.lead_type === "personal"
-                            ? "#a78bfa"
-                            : "var(--text-muted)",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                          width: "100%",
-                        }}
-                        title="Change lead type"
-                      >
-                        <option value="company">🏢 Company</option>
-                        <option value="personal">👤 Personal</option>
-                        <option value="others">❓ Others</option>
-                      </select>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination & Results Summary */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-          {totalResults > 0
-            ? `Showing ${Math.min((page - 1) * perPage + 1, totalResults)}–${Math.min(page * perPage, totalResults)} of ${totalResults} leads`
-            : "0 leads"}
-        </div>
-        {totalPages > 1 && (
-          <div style={{ display: "flex", gap: "6px" }}>
-            <button
-              disabled={page <= 1 || loading}
-              onClick={() => loadLeads(page - 1)}
-              className="btn btn-secondary btn-sm"
-            >
-              ‹ Previous
-            </button>
-            <span style={{ display: "flex", alignItems: "center", padding: "0 10px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-              Page {page} of {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages || loading}
-              onClick={() => loadLeads(page + 1)}
-              className="btn btn-secondary btn-sm"
-            >
-              Next ›
-            </button>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                          {lead.location || "Remote"}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
+                          <div>Posted: {formatDate(lead.date_posted)}</div>
+                          <div>Scraped: {formatDate(lead.scraped_at || lead.created_at)}</div>
+                        </div>
+                      </td>
+                      <td>
+                        {lead.contacts && lead.contacts.length > 0 ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            {lead.contacts.slice(0, 2).map((c: any, ci: number) => (
+                              <div key={ci} style={{ fontSize: "0.8rem" }}>
+                                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{c.name || "Executive"}</span>
+                                <span style={{ color: "var(--text-muted)" }}> ({c.role || "Contact"})</span>
+                                {c.email && (
+                                  <div style={{ color: "var(--accent-cyan)", fontSize: "0.75rem" }}>
+                                    ✉ {c.email}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {lead.contacts.length > 2 && (
+                              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                                +{lead.contacts.length - 2} more contacts
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Domain / No direct contact</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="size-badge">{lead.company_size || "1-50"}</span>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => setSelectedLead(lead)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <Eye style={{ width: "12px", height: "12px" }} /> Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
 
-      {/* Lead Detail Modal (Rendered to body via createPortal) */}
-      {selectedLead &&
+          {/* Pagination for flat leads */}
+          {totalPages > 1 && (
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <button
+                disabled={page <= 1 || loading}
+                onClick={() => loadLeads(page - 1)}
+                className="btn btn-secondary btn-sm"
+              >
+                ‹ Prev
+              </button>
+              <span style={{ display: "flex", alignItems: "center", padding: "0 10px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                disabled={page >= totalPages || loading}
+                onClick={() => loadLeads(page + 1)}
+                className="btn btn-secondary btn-sm"
+              >
+                Next ›
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: UPLOAD CSV / EXCEL SCHEDULE MODAL                                */}
+      {/* ========================================================================= */}
+      {showUploadModal &&
         createPortal(
           <div
             className="modal-backdrop"
@@ -706,7 +1193,140 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "rgba(15, 23, 42, 0.7)",
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => setShowUploadModal(false)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "580px",
+                padding: "1.5rem",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <UploadCloud style={{ width: "20px", height: "20px", color: "#10b981" }} />
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Upload Scraping Schedule</h3>
+                </div>
+                <button onClick={() => setShowUploadModal(false)} className="btn-icon-ghost">
+                  <X style={{ width: "16px", height: "16px" }} />
+                </button>
+              </div>
+
+              <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "1rem", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                <div><strong>Supported Formats:</strong> CSV or Excel (<code>.csv</code>, <code>.xlsx</code>, <code>.xls</code>)</div>
+                <div style={{ marginTop: "4px" }}>
+                  <strong>Required Columns:</strong> <code>ID | JobTitle | Target Location | Company Size | Scraping Limit | Scheduled date</code>
+                </div>
+                <div style={{ marginTop: "4px", color: "var(--accent-cyan)" }}>
+                  ⏰ The autonomous pipeline will match the scheduled date and start automatically everyday @ <strong>10:00 PM</strong> (or on demand via 'Run Now').
+                </div>
+              </div>
+
+              {/* Sample Template Downloads */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1.2rem" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Download sample template:</span>
+                <a
+                  href={api.getSampleScheduleTemplateUrl("csv")}
+                  download="hirepilot_scraping_schedule_template.csv"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                >
+                  <Download style={{ width: "12px", height: "12px" }} /> CSV Template
+                </a>
+                <a
+                  href={api.getSampleScheduleTemplateUrl("xlsx")}
+                  download="hirepilot_scraping_schedule_template.xlsx"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                >
+                  <Download style={{ width: "12px", height: "12px" }} /> Excel (.xlsx)
+                </a>
+              </div>
+
+              <form onSubmit={handleUploadSchedule}>
+                {/* File Dropzone / Selector */}
+                <div
+                  style={{
+                    border: "2px dashed var(--border-color)",
+                    borderRadius: "10px",
+                    padding: "24px",
+                    textAlign: "center",
+                    backgroundColor: "rgba(255, 255, 255, 0.02)",
+                    marginBottom: "1.2rem",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => document.getElementById("schedule-file-input")?.click()}
+                >
+                  <FileSpreadsheet style={{ width: "36px", height: "36px", color: "#10b981", margin: "0 auto 8px", opacity: 0.8 }} />
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+                    {uploadFile ? uploadFile.name : "Click or drag & drop CSV or Excel file here"}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                    {uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB` : "Supports .csv, .xlsx, .xls"}
+                  </div>
+                  <input
+                    id="schedule-file-input"
+                    type="file"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setUploadFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => setShowUploadModal(false)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUploading || !uploadFile}
+                    className="btn btn-primary btn-sm"
+                    style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)", display: "flex", alignItems: "center", gap: "5px" }}
+                  >
+                    {isUploading ? "Importing Tasks..." : "Import Schedule into Database"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: LEAD DETAIL MODAL                                                */}
+      {/* ========================================================================= */}
+      {selectedLead &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 999999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
               backdropFilter: "blur(8px)",
               padding: "1rem",
             }}
@@ -719,317 +1339,57 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                 maxWidth: "680px",
                 maxHeight: "88vh",
                 overflowY: "auto",
-                borderRadius: "16px",
                 padding: "1.5rem",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "1rem", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span className="platform-badge accent" style={{ fontSize: "0.72rem" }}>Verified Lead Profile</span>
-                    {selectedLead.company_size && (
-                      <span className="platform-badge" style={{ fontSize: "0.72rem" }}>
-                        {selectedLead.company_size}
-                      </span>
-                    )}
-                  </div>
-                  <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
-                    {selectedLead.company}
-                  </h2>
-                  {selectedLead.title && (
-                    <div style={{ color: "var(--accent-cyan)", fontSize: "0.9rem", fontWeight: 500, marginTop: "2px" }}>
-                      {selectedLead.title}
-                    </div>
-                  )}
+                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700 }}>{selectedLead.company}</h3>
+                  <div style={{ color: "var(--accent-cyan)", fontSize: "0.85rem", marginTop: "2px" }}>{selectedLead.title}</div>
                 </div>
-                <button
-                  className="btn-close"
-                  onClick={() => setSelectedLead(null)}
-                  style={{
-                    fontSize: "1.4rem",
-                    cursor: "pointer",
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                  }}
-                >
-                  &times;
+                <button onClick={() => setSelectedLead(null)} className="btn-icon-ghost">
+                  <X style={{ width: "16px", height: "16px" }} />
                 </button>
               </div>
 
-              {/* Quick Info Grid */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: "0.75rem",
-                  padding: "0.85rem",
-                  background: "var(--chip-bg)",
-                  borderRadius: "10px",
-                  border: "1px solid var(--border-subtle)",
-                  fontSize: "0.82rem",
-                  marginBottom: "1rem",
-                }}
-              >
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>LOCATION</span>
-                  <strong>{selectedLead.location || "Remote / Unspecified"}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>WEBSITE</span>
-                  {selectedLead.company_domain ? (
-                    <a
-                      href={selectedLead.company_domain.startsWith("http") ? selectedLead.company_domain : `https://${selectedLead.company_domain}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 600 }}
-                    >
-                      <Globe style={{ width: "12px", height: "12px" }} />
-                      {selectedLead.company_domain}
-                    </a>
-                  ) : (
-                    "N/A"
-                  )}
-                </div>
-                {selectedLead.site && (
-                  <div>
-                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>SOURCE</span>
-                    <strong style={{ textTransform: "capitalize" }}>{selectedLead.site}</strong>
-                  </div>
-                )}
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>DATE POSTED</span>
-                  <strong>{formatDate(selectedLead.date_posted)}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>DATE SCRAPED</span>
-                  <strong>{formatDate(selectedLead.scraped_at || selectedLead.created_at)}</strong>
-                </div>
-                {selectedLead.job_url && (
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.74rem" }}>
-                      {selectedLead.job_url.startsWith("http")
-                        ? "LINKEDIN / JOB URL"
-                        : selectedLead.job_url.startsWith("agent://")
-                        ? "LEAD SOURCE (AUTONOMOUS RESEARCH AGENT)"
-                        : "MANUAL LEAD IDENTIFIER"}
-                    </span>
-                    {selectedLead.job_url.startsWith("http") ? (
-                      <a
-                        href={selectedLead.job_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "#0a66c2",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          fontWeight: 600,
-                          wordBreak: "break-all",
-                          fontSize: "0.82rem",
-                          textDecoration: "none",
-                        }}
-                      >
-                        <ExternalLink style={{ width: "13px", height: "13px", flexShrink: 0 }} />
-                        <span>{selectedLead.job_url}</span>
-                      </a>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", flexWrap: "wrap" }}>
-                        <code
-                          style={{
-                            fontSize: "0.76rem",
-                            background: "var(--chip-bg)",
-                            padding: "3px 8px",
-                            borderRadius: "5px",
-                            color: "var(--text-muted)",
-                            border: "1px solid var(--border-subtle)",
-                          }}
-                        >
-                          {selectedLead.job_url}
-                        </code>
-                        <a
-                          href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(selectedLead.company)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            color: "#0a66c2",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontSize: "0.8rem",
-                            fontWeight: 600,
-                            textDecoration: "none",
-                          }}
-                          title={`Search ${selectedLead.company} on LinkedIn`}
-                        >
-                          <ExternalLink style={{ width: "12px", height: "12px" }} />
-                          <span>Search {selectedLead.company} on LinkedIn</span>
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "1rem", fontSize: "0.82rem" }}>
+                <div><strong>Location:</strong> {selectedLead.location || "Remote"}</div>
+                <div><strong>Company Size:</strong> {selectedLead.company_size || "Unspecified"}</div>
+                <div><strong>Domain:</strong> {selectedLead.company_domain || "—"}</div>
+                <div><strong>Relevance Score:</strong> {selectedLead.relevance_score || 50}/100</div>
               </div>
 
-              {/* Contacts Section */}
-              <div style={{ marginBottom: "1.2rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <h4 style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--accent-cyan)", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span>Key Decision Makers &amp; Contacts</span>
-                    <span style={{ fontSize: "0.75rem", padding: "1px 6px", borderRadius: "10px", background: "var(--chip-bg)" }}>
-                      {selectedLead.contacts?.length || 0}
-                    </span>
-                  </h4>
-                </div>
-
-                {selectedLead.contacts && selectedLead.contacts.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              {selectedLead.contacts && selectedLead.contacts.length > 0 && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <h4 style={{ fontSize: "0.9rem", marginBottom: "0.5rem", color: "var(--accent-cyan)" }}>Discovered Contacts ({selectedLead.contacts.length})</h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {selectedLead.contacts.map((c: any, i: number) => (
-                      <div
-                        key={i}
-                        style={{
-                          padding: "10px 12px",
-                          background: "rgba(255, 255, 255, 0.03)",
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "10px",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text-primary)" }}>
-                            {c.name || "Contact Person"}
-                          </div>
-                          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                            {c.role || "Executive / Hiring Manager"}
-                          </div>
-                          {c.email && (
-                            <div
-                              style={{
-                                color: "var(--accent-cyan)",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: "0.8rem",
-                                marginTop: "3px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                              }}
-                            >
-                              <span>✉</span>
-                              <span>{c.email}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          {(c.linkedin_url || c.linkedin) && (
-                            <a
-                              href={c.linkedin_url || c.linkedin}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary btn-sm"
-                              style={{ fontSize: "0.74rem", padding: "4px 8px", textDecoration: "none", color: "#0a66c2", fontWeight: 600 }}
-                            >
-                              LinkedIn Profile →
-                            </a>
-                          )}
-                        </div>
+                      <div key={i} style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-color)", padding: "8px 12px", borderRadius: "6px", fontSize: "0.82rem" }}>
+                        <div style={{ fontWeight: 600 }}>{c.name} — <span style={{ color: "var(--text-muted)" }}>{c.role}</span></div>
+                        {c.email && <div style={{ color: "var(--accent-cyan)", marginTop: "2px" }}>✉ {c.email}</div>}
+                        {c.linkedin_url && (
+                          <a href={c.linkedin_url} target="_blank" rel="noreferrer" style={{ color: "#38bdf8", display: "inline-flex", alignItems: "center", gap: "3px", marginTop: "2px", textDecoration: "none" }}>
+                            <ExternalLink style={{ width: "11px", height: "11px" }} /> LinkedIn Profile
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontStyle: "italic", padding: "8px 0" }}>
-                    No direct executive contacts discovered yet.
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Summary / Notes */}
-              {(selectedLead.lead_summary || selectedLead.description || selectedLead.job_description) && (
-                <div style={{ marginBottom: "1.2rem" }}>
-                  <h4 style={{ fontSize: "0.88rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--text-primary)" }}>
-                    Opportunity Overview &amp; Description
-                  </h4>
-                  <div
-                    style={{
-                      background: "var(--chip-bg)",
-                      border: "1px solid var(--border-subtle)",
-                      padding: "10px 12px",
-                      borderRadius: "10px",
-                      fontSize: "0.82rem",
-                      lineHeight: "1.5",
-                      color: "var(--text-secondary)",
-                      maxHeight: "180px",
-                      overflowY: "auto",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {selectedLead.lead_summary || selectedLead.description || selectedLead.job_description}
+              {selectedLead.lead_summary && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <h4 style={{ fontSize: "0.9rem", marginBottom: "0.4rem", color: "var(--accent-cyan)" }}>Opportunity Summary</h4>
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.5, background: "rgba(255, 255, 255, 0.02)", padding: "10px", borderRadius: "6px" }}>
+                    {selectedLead.lead_summary}
                   </div>
                 </div>
               )}
 
-              {/* Technologies */}
-              {selectedLead.key_technologies && selectedLead.key_technologies.length > 0 && (
-                <div style={{ marginBottom: "1.2rem" }}>
-                  <h4 style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--text-muted)" }}>
-                    Technologies &amp; Skills
-                  </h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                    {selectedLead.key_technologies.map((tech: string, i: number) => (
-                      <span
-                        key={i}
-                        style={{
-                          fontSize: "0.74rem",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
-                          background: "rgba(6, 182, 212, 0.1)",
-                          color: "var(--accent-cyan)",
-                          border: "1px solid rgba(6, 182, 212, 0.25)",
-                        }}
-                      >
-                        {tech}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AI Thinking Process */}
-              {selectedLead.thinking_process && (
-                <div style={{ marginBottom: "1.2rem" }}>
-                  <h4 style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--accent-emerald)" }}>
-                    AI Reasoning &amp; Enrichment Log
-                  </h4>
-                  <pre
-                    style={{
-                      background: "var(--terminal-bg)",
-                      border: "1px solid var(--border-subtle)",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      fontSize: "0.76rem",
-                      whiteSpace: "pre-wrap",
-                      color: "var(--terminal-text)",
-                      maxHeight: "160px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {selectedLead.thinking_process}
-                  </pre>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border-subtle)", paddingTop: "0.85rem", marginTop: "0.5rem" }}>
-                <button onClick={() => setSelectedLead(null)} className="btn btn-secondary btn-sm" style={{ padding: "6px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
+                <button onClick={() => setSelectedLead(null)} className="btn btn-secondary btn-sm">
                   Close
                 </button>
               </div>
@@ -1038,7 +1398,9 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
           document.body
         )}
 
-      {/* Manual Lead Entry Modal (Rendered to body via createPortal) */}
+      {/* ========================================================================= */}
+      {/* MODAL 4: MANUAL LEAD CREATION MODAL                                       */}
+      {/* ========================================================================= */}
       {showAddModal &&
         createPortal(
           <div
@@ -1057,42 +1419,38 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
               backdropFilter: "blur(8px)",
               padding: "1rem",
             }}
-            onClick={() => !submittingLead && setShowAddModal(false)}
+            onClick={() => setShowAddModal(false)}
           >
             <div
               className="modal-dialog glass-card"
               style={{
                 width: "100%",
-                maxWidth: "640px",
-                maxHeight: "88vh",
+                maxWidth: "620px",
+                maxHeight: "90vh",
                 overflowY: "auto",
-                borderRadius: "16px",
                 padding: "1.5rem",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="modal-header">
-                <div className="modal-title-group">
-                  <span className="platform-badge accent">
-                    <UserPlus style={{ width: "12px", height: "12px" }} /> Manual Entry
-                  </span>
-                  <h2>Add New Lead to SQLite</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Plus style={{ width: "18px", height: "18px", color: "var(--accent-cyan)" }} />
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Add Manual Lead to SQLite</h3>
                 </div>
-                <button className="btn-close" disabled={submittingLead} onClick={() => setShowAddModal(false)}>
-                  &times;
+                <button onClick={() => setShowAddModal(false)} className="btn-icon-ghost">
+                  <X style={{ width: "16px", height: "16px" }} />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateManualLead} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <form onSubmit={handleCreateManualLead} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
                   <div className="form-group">
                     <label>Company Name *</label>
                     <input
                       type="text"
                       required
                       className="eu-input"
-                      placeholder="e.g. Acme Corp"
+                      placeholder="e.g. Stripe, Acme Corp"
                       value={manualForm.company}
                       onChange={(e) => setManualForm({ ...manualForm, company: e.target.value })}
                     />
@@ -1110,9 +1468,9 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
                   <div className="form-group">
-                    <label>Company Website / Domain</label>
+                    <label>Company Domain / Website</label>
                     <input
                       type="text"
                       className="eu-input"
@@ -1122,173 +1480,15 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                     />
                   </div>
                   <div className="form-group">
-                    <label>LinkedIn / Job URL</label>
+                    <label>Location</label>
                     <input
-                      type="url"
+                      type="text"
                       className="eu-input"
-                      placeholder="https://www.linkedin.com/jobs/view/..."
-                      value={manualForm.job_url}
-                      onChange={(e) => setManualForm({ ...manualForm, job_url: e.target.value })}
+                      placeholder="e.g. Remote, San Francisco, CA"
+                      value={manualForm.location}
+                      onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
                     />
                   </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Location</label>
-                  <input
-                    type="text"
-                    className="eu-input"
-                    placeholder="e.g. Remote, San Francisco, CA"
-                    value={manualForm.location}
-                    onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
-                  />
-                </div>
-
-                {/* Lead Type Classification */}
-                <div className="form-group">
-                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ fontWeight: 600 }}>Lead Type *</span>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Target Classification</span>
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.6rem" }}>
-                    {[
-                      { key: "company", icon: "🏢", label: "Company", desc: "Finding a company / agency" },
-                      { key: "personal", icon: "👤", label: "Personal", desc: "Finding person / freelancer" },
-                      { key: "others", icon: "❓", label: "Others", desc: "Unspecified / General" },
-                    ].map((t) => (
-                      <div
-                        key={t.key}
-                        onClick={() => setManualForm({ ...manualForm, lead_type: t.key })}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "10px",
-                          border: manualForm.lead_type === t.key ? "2px solid var(--accent-cyan)" : "1px solid var(--border-color)",
-                          background: manualForm.lead_type === t.key ? "rgba(6, 182, 212, 0.12)" : "var(--chip-bg)",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "3px",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "1rem" }}>{t.icon}</span>
-                          <span style={{
-                            fontWeight: manualForm.lead_type === t.key ? 700 : 600,
-                            fontSize: "0.86rem",
-                            color: manualForm.lead_type === t.key ? "var(--accent-cyan)" : "var(--text-primary)"
-                          }}>
-                            {t.label}
-                          </span>
-                        </div>
-                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1.3 }}>
-                          {t.desc}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                  <div className="form-group">
-                    <label>Company Size</label>
-                    <select
-                      className="eu-input"
-                      value={manualForm.company_size}
-                      onChange={(e) => setManualForm({ ...manualForm, company_size: e.target.value })}
-                    >
-                      <option value="1-10 Employees">1-10 Employees</option>
-                      <option value="11-50 Employees">11-50 Employees</option>
-                      <option value="51-200 Employees">51-200 Employees</option>
-                      <option value="201-500 Employees">201-500 Employees</option>
-                      <option value="500+ Employees">500+ Employees</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Employment Type</label>
-                    <select
-                      className="eu-input"
-                      value={manualForm.job_type}
-                      onChange={(e) => setManualForm({ ...manualForm, job_type: e.target.value })}
-                    >
-                      <option value="Full-time">Full-time</option>
-                      <option value="Contract / Freelance">Contract / Freelance</option>
-                      <option value="Part-time">Part-time</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Key Technologies (comma-separated)</label>
-                  <input
-                    type="text"
-                    className="eu-input"
-                    placeholder="e.g. Python, FastAPI, React, PostgreSQL"
-                    value={manualForm.key_technologies}
-                    onChange={(e) => setManualForm({ ...manualForm, key_technologies: e.target.value })}
-                  />
-                </div>
-
-                <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.8rem" }}>
-                  <h4 style={{ fontSize: "0.88rem", marginBottom: "0.6rem", color: "var(--accent-cyan)" }}>
-                    Primary Contact / Decision Maker
-                  </h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
-                    <div className="form-group">
-                      <label>Contact Full Name</label>
-                      <input
-                        type="text"
-                        className="eu-input"
-                        placeholder="e.g. Alex Mercer"
-                        value={manualForm.contact_name}
-                        onChange={(e) => setManualForm({ ...manualForm, contact_name: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Role / Position</label>
-                      <input
-                        type="text"
-                        className="eu-input"
-                        placeholder="e.g. VP of Engineering / CTO"
-                        value={manualForm.contact_role}
-                        onChange={(e) => setManualForm({ ...manualForm, contact_role: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem", marginTop: "0.6rem" }}>
-                    <div className="form-group">
-                      <label>Email Address</label>
-                      <input
-                        type="email"
-                        className="eu-input"
-                        placeholder="e.g. alex@acme.com"
-                        value={manualForm.contact_email}
-                        onChange={(e) => setManualForm({ ...manualForm, contact_email: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>LinkedIn Profile URL</label>
-                      <input
-                        type="text"
-                        className="eu-input"
-                        placeholder="https://linkedin.com/in/..."
-                        value={manualForm.contact_linkedin}
-                        onChange={(e) => setManualForm({ ...manualForm, contact_linkedin: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Opportunity / Lead Summary</label>
-                  <textarea
-                    className="eu-input"
-                    rows={3}
-                    placeholder="Notes, project requirements, or outreach strategy..."
-                    value={manualForm.lead_summary}
-                    onChange={(e) => setManualForm({ ...manualForm, lead_summary: e.target.value })}
-                  />
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>

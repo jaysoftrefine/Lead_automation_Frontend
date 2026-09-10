@@ -59,6 +59,39 @@ export const api = {
   getPipelineWsUrl,
   stopPipeline: () => fetchJson("/api/pipeline/stop", { method: "POST" }),
 
+  // Scheduled Scraping Jobs & Batch Upload
+  getScheduledJobs: (params: Record<string, any> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return fetchJson(`/api/pipeline/schedule${q ? `?${q}` : ""}`);
+  },
+  getScheduledJob: (jobId: string) => fetchJson(`/api/pipeline/schedule/${encodeURIComponent(jobId)}`),
+  uploadScrapingSchedule: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    const res = await fetch(`${apiBase}/api/pipeline/schedule/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || data.message || "Failed to upload schedule file");
+    }
+    return data;
+  },
+  runScheduledJobNow: (jobId: string) =>
+    fetchJson(`/api/pipeline/schedule/${encodeURIComponent(jobId)}/run`, {
+      method: "POST",
+    }),
+  deleteScheduledJob: (jobId: string) =>
+    fetchJson(`/api/pipeline/schedule/${encodeURIComponent(jobId)}`, {
+      method: "DELETE",
+    }),
+  getSampleScheduleTemplateUrl: (format = "csv") => {
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    return `${apiBase}/api/pipeline/schedule-template?format=${format}`;
+  },
+
   // Leads
   getLeads: (params: Record<string, any> = {}) => {
     const q = new URLSearchParams(params).toString();

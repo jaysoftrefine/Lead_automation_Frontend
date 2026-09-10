@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Square, Terminal, Sliders, Globe, Cpu, CheckCircle, AlertTriangle, Wifi } from "lucide-react";
+import { createPortal } from "react-dom";
+import {
+  Play,
+  Square,
+  Terminal,
+  Sliders,
+  Globe,
+  Cpu,
+  CheckCircle,
+  AlertTriangle,
+  Wifi,
+  UploadCloud,
+  FileSpreadsheet,
+  Download,
+  X,
+} from "lucide-react";
 import { api, getPipelineWsUrl } from "../services/api";
 
 export interface PipelineRunnerProps {
@@ -25,8 +40,30 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
   ]);
   const [metrics, setMetrics] = useState({ scraped: 0, enriched: 0, status: "idle" });
   const [wsConnected, setWsConnected] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
+
+  const handleUploadSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      onToast("Please select a CSV or Excel file to upload.", "error");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const res = await api.uploadScrapingSchedule(uploadFile);
+      onToast(res.message || `Imported ${res.imported_count || 0} scheduled scraping tasks!`, "success");
+      setShowUploadModal(false);
+      setUploadFile(null);
+    } catch (err: any) {
+      onToast(err.message || "Failed to upload schedule file", "error");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const togglePlatform = (key: string) => {
     setPlatforms((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -280,12 +317,12 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
             <button
               onClick={handleStart}
               disabled={isRunning}
               className="btn btn-primary"
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: "200px" }}
             >
               <Play />
               <span>{isRunning ? "Pipeline Running..." : "Start Autonomous Engine"}</span>
@@ -296,6 +333,31 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
                 <span>Stop</span>
               </button>
             )}
+          </div>
+
+          <div
+            style={{
+              marginTop: "1rem",
+              paddingTop: "0.9rem",
+              borderTop: "1px dashed var(--border-color)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}
+          >
+            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+              Want to run bulk or scheduled searches?
+            </span>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="btn btn-secondary btn-sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.78rem" }}
+            >
+              <UploadCloud style={{ width: "13px", height: "13px", color: "#10b981" }} />
+              <span>Upload CSV / Excel Schedule</span>
+            </button>
           </div>
         </div>
       </div>
@@ -368,6 +430,135 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
         </div>
       </div>
 
+      {/* Upload Schedule Modal */}
+      {showUploadModal &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => setShowUploadModal(false)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "580px",
+                padding: "1.5rem",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <UploadCloud style={{ width: "20px", height: "20px", color: "#10b981" }} />
+                  <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Upload Scraping Schedule</h3>
+                </div>
+                <button onClick={() => setShowUploadModal(false)} className="btn-icon-ghost">
+                  <X style={{ width: "16px", height: "16px" }} />
+                </button>
+              </div>
+
+              <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "1rem", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                <div><strong>Supported Formats:</strong> CSV or Excel (<code>.csv</code>, <code>.xlsx</code>, <code>.xls</code>)</div>
+                <div style={{ marginTop: "4px" }}>
+                  <strong>Required Columns:</strong> <code>ID | JobTitle | Target Location | Company Size | Scraping Limit | Scheduled date</code>
+                </div>
+                <div style={{ marginTop: "4px", color: "var(--accent-cyan)" }}>
+                  ⏰ The autonomous pipeline will match the scheduled date and start automatically everyday @ <strong>10:00 PM</strong> (or on demand via 'Run Now' in Discovered Leads).
+                </div>
+              </div>
+
+              {/* Sample Template Downloads */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1.2rem" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Download template:</span>
+                <a
+                  href={api.getSampleScheduleTemplateUrl("csv")}
+                  download="hirepilot_scraping_schedule_template.csv"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                >
+                  <Download style={{ width: "12px", height: "12px" }} /> CSV Template
+                </a>
+                <a
+                  href={api.getSampleScheduleTemplateUrl("xlsx")}
+                  download="hirepilot_scraping_schedule_template.xlsx"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                >
+                  <Download style={{ width: "12px", height: "12px" }} /> Excel (.xlsx)
+                </a>
+              </div>
+
+              <form onSubmit={handleUploadSchedule}>
+                <div
+                  style={{
+                    border: "2px dashed var(--border-color)",
+                    borderRadius: "10px",
+                    padding: "24px",
+                    textAlign: "center",
+                    backgroundColor: "rgba(255, 255, 255, 0.02)",
+                    marginBottom: "1.2rem",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => document.getElementById("pipeline-file-input")?.click()}
+                >
+                  <FileSpreadsheet style={{ width: "36px", height: "36px", color: "#10b981", margin: "0 auto 8px", opacity: 0.8 }} />
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+                    {uploadFile ? uploadFile.name : "Click or drag & drop CSV or Excel file here"}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                    {uploadFile ? `${(uploadFile.size / 1024).toFixed(1)} KB` : "Supports .csv, .xlsx, .xls"}
+                  </div>
+                  <input
+                    id="pipeline-file-input"
+                    type="file"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setUploadFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => setShowUploadModal(false)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUploading || !uploadFile}
+                    className="btn btn-primary btn-sm"
+                    style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)", display: "flex", alignItems: "center", gap: "5px" }}
+                  >
+                    {isUploading ? "Importing Tasks..." : "Import Schedule into Database"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
