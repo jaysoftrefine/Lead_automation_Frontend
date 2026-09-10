@@ -3,6 +3,7 @@ export interface EmailTemplate {
   name: string;
   subject: string;
   body: string;
+  cc?: string | null;
   attachment_path?: string | null;
   attachment_name?: string | null;
   created_at?: string;
@@ -80,6 +81,7 @@ export interface QueueItem {
   subject: string;
   body: string;
   raw_body?: string;
+  cc?: string | null;
   status: "draft" | "sent" | "failed" | string;
   error_message?: string;
   sent_at?: string;
@@ -104,6 +106,7 @@ export interface Campaign {
   failed_count?: number;
   delay_seconds?: number;
   smtp_account_id?: string;
+  cc?: string | null;
   created_at?: string;
   completed_at?: string;
   template_name?: string;

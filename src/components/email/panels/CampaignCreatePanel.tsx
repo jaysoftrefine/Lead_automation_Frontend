@@ -16,6 +16,7 @@ import {
   Bell,
   ToggleLeft,
   ToggleRight,
+  Mail,
 } from "lucide-react";
 import type { EmailTemplate, Audience } from "../../../types/email";
 
@@ -29,6 +30,8 @@ export interface CampaignCreatePanelProps {
   setCampName: (name: string) => void;
   campTemplateId: string;
   setCampTemplateId: (id: string) => void;
+  campCc?: string;
+  setCampCc?: (cc: string) => void;
   campAudienceId: string;
   setCampAudienceId: (id: string) => void;
   campSources: { sqlite: boolean; mongo: boolean; manual: boolean };
@@ -60,6 +63,8 @@ export function CampaignCreatePanel({
   setCampName,
   campTemplateId,
   setCampTemplateId,
+  campCc = "",
+  setCampCc,
   campAudienceId,
   setCampAudienceId,
   campSources,
@@ -276,7 +281,14 @@ export function CampaignCreatePanel({
               id="camp-template"
               value={campTemplateId}
               disabled={sequenceMode}
-              onChange={(e) => setCampTemplateId(e.target.value)}
+              onChange={(e) => {
+                const newId = e.target.value;
+                setCampTemplateId(newId);
+                const t = templates.find((tpl) => tpl.id === newId);
+                if (t && t.cc && setCampCc) {
+                  setCampCc(t.cc);
+                }
+              }}
               style={{
                 cursor: sequenceMode ? "not-allowed" : "pointer",
                 background: sequenceMode ? "rgba(255, 255, 255, 0.02)" : undefined,
@@ -298,6 +310,42 @@ export function CampaignCreatePanel({
               )}
             </select>
           </div>
+
+          {/* CC Recipients (Optional) */}
+          {!sequenceMode && (
+            <div className="form-group" style={{ marginTop: "-2px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "4px",
+                }}
+              >
+                <label htmlFor="camp-cc" style={{ margin: 0 }}>
+                  CC Recipients{" "}
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--text-muted)",
+                      fontWeight: 400,
+                    }}
+                  >
+                    (optional — comma-separated)
+                  </span>
+                </label>
+              </div>
+              <input
+                id="camp-cc"
+                type="text"
+                className="eu-input"
+                placeholder="e.g. colleague@company.com, boss@company.com"
+                value={campCc}
+                onChange={(e) => setCampCc && setCampCc(e.target.value)}
+                style={{ fontSize: "0.85rem" }}
+              />
+            </div>
+          )}
 
           {/* Select Target Audience */}
           <div className="form-group">
@@ -1030,6 +1078,26 @@ export function CampaignCreatePanel({
                   <span>
                     Attachment: {selectedTemplate.attachment_name}
                   </span>
+                </div>
+              )}
+
+              {(campCc || selectedTemplate?.cc) && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "4px 10px",
+                    borderRadius: "var(--radius-full)",
+                    background: "rgba(6,182,212,0.12)",
+                    border: "1px solid rgba(6,182,212,0.3)",
+                    fontSize: "0.75rem",
+                    color: "var(--accent-cyan)",
+                    width: "fit-content",
+                  }}
+                >
+                  <Mail style={{ width: "12px", height: "12px" }} />
+                  <span>CC: {campCc || selectedTemplate?.cc}</span>
                 </div>
               )}
 

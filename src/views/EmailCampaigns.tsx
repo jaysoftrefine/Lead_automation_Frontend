@@ -64,6 +64,7 @@ export function EmailCampaigns({
   // Campaign State
   const [campName, setCampName] = useState("");
   const [campTemplateId, setCampTemplateId] = useState("");
+  const [campCc, setCampCc] = useState("");
   const [campAudienceId, setCampAudienceId] = useState("");
   const [campSources, setCampSources] = useState<{
     sqlite: boolean;
@@ -273,6 +274,7 @@ export function EmailCampaigns({
           category: c.category || "",
         })),
         delay_seconds: parseFloat(String(campDelay)) || 0.8,
+        cc: campCc.trim() || undefined,
         draft: true,
       };
 
@@ -372,6 +374,7 @@ export function EmailCampaigns({
           category: c.category || "",
         })),
         delay_seconds: parseFloat(String(campDelay)) || 0.8,
+        cc: campCc.trim() || undefined,
         draft: false,
       };
 
@@ -480,6 +483,7 @@ export function EmailCampaigns({
       const res = await api.sendTestEmail({
         to_email: testEmail.trim(),
         template_id: campTemplateId,
+        cc: campCc.trim() || undefined,
         smtp_account_id: selectedCampaignSmtpId || undefined,
       });
       if (res.status === "success") {
@@ -500,6 +504,7 @@ export function EmailCampaigns({
         to_email: targetEmail.trim(),
         subject: currentItem.rendered_subject,
         body: currentItem.rendered_body,
+        cc: campCc.trim() || undefined,
         attachment_path: templates.find((t) => t.id === campTemplateId)?.attachment_path,
         attachment_name: templates.find((t) => t.id === campTemplateId)?.attachment_name,
         smtp_account_id: selectedCampaignSmtpId || undefined,
@@ -519,6 +524,7 @@ export function EmailCampaigns({
     setEditingCampaignId(c.id);
     setCampName(c.name || "");
     setCampTemplateId(c.template_id || "");
+    setCampCc(c.cc || "");
     if (c.smtp_account_id) {
       setSelectedCampaignSmtpId(c.smtp_account_id);
     }
@@ -563,6 +569,7 @@ export function EmailCampaigns({
     setEditingCampaignId(null);
     setCampName("");
     setCampTemplateId("");
+    setCampCc("");
     setCampSources({ sqlite: false, mongo: false, manual: false });
     setCampManualEmails("");
     setSelectedContacts([]);
@@ -720,6 +727,8 @@ export function EmailCampaigns({
           setCampName={setCampName}
           campTemplateId={campTemplateId}
           setCampTemplateId={setCampTemplateId}
+          campCc={campCc}
+          setCampCc={setCampCc}
           campAudienceId={campAudienceId}
           setCampAudienceId={setCampAudienceId}
           campSources={campSources}
@@ -752,6 +761,7 @@ export function EmailCampaigns({
         <CampaignSendProgressPanel
           campName={campName}
           campTemplateId={campTemplateId}
+          campCc={campCc}
           templates={templates}
           selectedContacts={selectedContacts}
           estimatedRecipients={selectedContacts.length || null}

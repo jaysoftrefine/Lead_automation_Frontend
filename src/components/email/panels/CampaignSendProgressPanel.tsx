@@ -20,6 +20,7 @@ import type {
 export interface CampaignSendProgressPanelProps {
   campName: string;
   campTemplateId: string;
+  campCc?: string;
   templates: EmailTemplate[];
   selectedContacts: any[];
   estimatedRecipients: number | null;
@@ -47,6 +48,7 @@ export interface CampaignSendProgressPanelProps {
 export function CampaignSendProgressPanel({
   campName,
   campTemplateId,
+  campCc = "",
   templates,
   selectedContacts,
   estimatedRecipients,
@@ -164,6 +166,14 @@ export function CampaignSendProgressPanel({
                     : "Calculated at dispatch"}
                 </strong>
               </span>
+              {(campCc || selectedTemplate?.cc) && (
+                <span>
+                  ✉️ CC:{" "}
+                  <strong style={{ color: "var(--accent-violet)" }}>
+                    {campCc || selectedTemplate?.cc}
+                  </strong>
+                </span>
+              )}
             </div>
           </div>
 

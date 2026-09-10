@@ -50,6 +50,7 @@ export function ReviewQueuePanel({
   const [generatingQueue, setGeneratingQueue] = useState(false);
   const [sendingSingleQueueId, setSendingSingleQueueId] = useState<string | null>(null);
   const [queueEditSubject, setQueueEditSubject] = useState("");
+  const [queueEditCc, setQueueEditCc] = useState("");
   const [queueEditBody, setQueueEditBody] = useState("");
   const [queuePreviewMode, setQueuePreviewMode] = useState<"preview" | "edit">("preview");
   const [regeneratingAI, setRegeneratingAI] = useState(false);
@@ -74,10 +75,12 @@ export function ReviewQueuePanel({
         if (updated) {
           setSelectedQueueItem(updated);
           setQueueEditSubject(updated.subject);
+          setQueueEditCc(updated.cc || "");
           setQueueEditBody(updated.body);
         } else if (items.length > 0) {
           setSelectedQueueItem(items[0]);
           setQueueEditSubject(items[0].subject);
+          setQueueEditCc(items[0].cc || "");
           setQueueEditBody(items[0].body);
         } else {
           setSelectedQueueItem(null);
@@ -85,6 +88,7 @@ export function ReviewQueuePanel({
       } else if (items.length > 0) {
         setSelectedQueueItem(items[0]);
         setQueueEditSubject(items[0].subject);
+        setQueueEditCc(items[0].cc || "");
         setQueueEditBody(items[0].body);
       }
     } catch (e) {
@@ -101,6 +105,7 @@ export function ReviewQueuePanel({
   useEffect(() => {
     if (selectedQueueItem) {
       setQueueEditSubject(selectedQueueItem.subject || "");
+      setQueueEditCc(selectedQueueItem.cc || "");
       setQueueEditBody(selectedQueueItem.body || "");
       setQueueItemSmtpId(
         selectedQueueItem.smtp_account_id ||
@@ -145,6 +150,7 @@ export function ReviewQueuePanel({
       await api.updateQueueItem(selectedQueueItem.id, {
         subject: queueEditSubject,
         body: queueEditBody,
+        cc: queueEditCc.trim() || null,
         smtp_account_id: queueItemSmtpId || undefined,
       });
       onToast("Email draft updated!", "success");
@@ -164,17 +170,20 @@ export function ReviewQueuePanel({
       if (
         queueEditSubject !== item.subject ||
         queueEditBody !== (item.raw_body || item.body) ||
+        queueEditCc !== (item.cc || "") ||
         (queueItemSmtpId && queueItemSmtpId !== item.smtp_account_id)
       ) {
         await api.updateQueueItem(item.id, {
           subject: queueEditSubject,
           body: queueEditBody,
+          cc: queueEditCc.trim() || null,
           smtp_account_id: useSmtpId || undefined,
         });
       }
 
       const res = await api.sendQueueItem(item.id, {
         smtp_account_id: useSmtpId || undefined,
+        cc: queueEditCc.trim() || undefined,
       });
       if (res.status === "success") {
         onToast(res.message || `Sent to ${item.recipient_email}!`, "success");
@@ -853,6 +862,24 @@ export function ReviewQueuePanel({
                   value={queueEditSubject}
                   onChange={(e) => setQueueEditSubject(e.target.value)}
                   style={{ fontWeight: 600 }}
+                />
+              </div>
+
+              {/* Editable CC Field */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: "0.78rem" }}>
+                  CC Recipients{" "}
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 400 }}>
+                    (optional — comma-separated)
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  className="eu-input"
+                  placeholder="e.g. colleague@company.com, manager@company.com"
+                  value={queueEditCc}
+                  onChange={(e) => setQueueEditCc(e.target.value)}
+                  style={{ fontSize: "0.82rem" }}
                 />
               </div>
 

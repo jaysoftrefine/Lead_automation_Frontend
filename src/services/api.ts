@@ -294,7 +294,7 @@ export const api = {
     fetchJson(`/api/email/queue/${id}/regenerate-ai`, {
       method: "POST",
     }),
-  sendQueueItem: (id: string | number, payload?: { smtp_account_id?: string }) =>
+  sendQueueItem: (id: string | number, payload?: { smtp_account_id?: string; cc?: string }) =>
     fetchJson(`/api/email/queue/${id}/send`, {
       method: "POST",
       body: payload ? JSON.stringify(payload) : undefined,
