@@ -23,6 +23,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Mail,
+  GripVertical,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -54,13 +56,26 @@ function formatDateTime(dateStr?: string | null): string {
   }
 }
 
+function outreachTemplateLabel(lead: { lead_type?: string; outreach_stage?: number }): string {
+  const stage = Number(lead.outreach_stage) || 1;
+  const stageName = stage === 1 ? "Initial Outreach" : stage === 2 ? "Follow-up" : "Final Follow-up";
+  const t = (lead.lead_type || "others").toLowerCase();
+  if (t === "company") return `Company - ${stageName}`;
+  if (t === "personal") return `Freelancer - ${stageName}`;
+  return "— (classify first)";
+}
+
+function leadHasEmail(lead: { contacts?: Array<{ email?: string }> | null }): boolean {
+  return !!lead.contacts?.some((c) => (c?.email || "").includes("@"));
+}
+
 export interface LeadsExplorerProps {
   onToast: (message: string, type?: string) => void;
 }
 
 export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
-  // Main view mode: "scheduled_jobs" (the redesigned view) vs "all_leads" (flat leads list)
-  const [viewMode, setViewMode] = useState<"scheduled_jobs" | "all_leads">("scheduled_jobs");
+  // Main view mode: scraping tasks | outreach automation | flat leads
+  const [viewMode, setViewMode] = useState<"scheduled_jobs" | "outreach" | "all_leads">("scheduled_jobs");
 
   // --- Scheduled Jobs State ---
   const [scheduledJobs, setScheduledJobs] = useState<any[]>([]);
@@ -79,6 +94,10 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [expandedLeads, setExpandedLeads] = useState<any[]>([]);
   const [expandedLoading, setExpandedLoading] = useState(false);
+  const [selectedLeadUrls, setSelectedLeadUrls] = useState<Set<string>>(new Set());
+  const [draggingLeadUrl, setDraggingLeadUrl] = useState<string | null>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+  const [dragOverTab, setDragOverTab] = useState<string | null>(null);
 
   // --- Flat Leads Explorer State ---
   const [leads, setLeads] = useState<any[]>([]);
@@ -169,7 +188,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
         page: targetPage,
         limit: perPage,
       };
-      if (targetCompanySize) params.company_size = targetCompanySize;
+      if (targetCompanySize && targetCompanySize !== "all") params.company_size = targetCompanySize;
       if (targetType && targetType !== "all") params.lead_type = targetType;
       if (targetSearch.trim()) params.search = targetSearch.trim();
 
@@ -213,9 +232,11 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
   const toggleExpandJob = async (job: any) => {
     if (expandedJobId === job.id) {
       setExpandedJobId(null);
+      setSelectedLeadUrls(new Set());
       return;
     }
     setExpandedJobId(job.id);
+    setSelectedLeadUrls(new Set());
     setExpandedLoading(true);
     try {
       const res = await api.getLeads({ scheduled_job_id: job.id, limit: 100 });
@@ -234,6 +255,217 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       setExpandedLoading(false);
     }
   };
+
+  const toggleLeadSelect = (job_url?: string) => {
+    if (!job_url) return;
+    setSelectedLeadUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(job_url)) next.delete(job_url);
+      else next.add(job_url);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (list: any[]) => {
+    const urls = list.map((l) => l.job_url).filter(Boolean);
+    const allSelected = urls.length > 0 && urls.every((u: string) => selectedLeadUrls.has(u));
+    setSelectedLeadUrls(allSelected ? new Set() : new Set(urls));
+  };
+
+  const handleLeadTypeChange = async (job_url: string, newType: string) => {
+    setLeads((prev) =>
+      prev.map((l) => (l.job_url === job_url ? { ...l, lead_type: newType } : l))
+    );
+    setExpandedLeads((prev) =>
+      prev.map((l) => (l.job_url === job_url ? { ...l, lead_type: newType } : l))
+    );
+    if (selectedLead && selectedLead.job_url === job_url) {
+      setSelectedLead((prev: any) => (prev ? { ...prev, lead_type: newType } : prev));
+    }
+    try {
+      await api.updateLeadType(job_url, newType);
+      onToast(`Lead type updated to "${newType}"`, "success");
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+      if (expandedJobId) {
+        const reload = await api.getLeads({ scheduled_job_id: expandedJobId, limit: 100 });
+        setExpandedLeads(reload.leads || reload.data || []);
+      }
+    } catch (e: any) {
+      onToast(e.message || "Failed to update lead type", "error");
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+    }
+  };
+
+  // ponytail: N parallel single-lead API calls — fine for page-sized selections; add bulk endpoint if lists grow past ~100
+  const handleBulkLeadTypeChange = async (newType: string) => {
+    const urls = [...selectedLeadUrls];
+    if (!urls.length) return;
+    const urlSet = new Set(urls);
+    setLeads((prev) =>
+      prev.map((l) => (urlSet.has(l.job_url) ? { ...l, lead_type: newType } : l))
+    );
+    setExpandedLeads((prev) =>
+      prev.map((l) => (urlSet.has(l.job_url) ? { ...l, lead_type: newType } : l))
+    );
+    try {
+      await Promise.all(urls.map((url) => api.updateLeadType(url, newType)));
+      onToast(`${urls.length} leads set to "${newType}"`, "success");
+      setSelectedLeadUrls(new Set());
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+      if (expandedJobId) {
+        const reload = await api.getLeads({ scheduled_job_id: expandedJobId, limit: 100 });
+        setExpandedLeads(reload.leads || reload.data || []);
+      }
+    } catch (e: any) {
+      onToast(e.message || "Failed to update lead types", "error");
+      loadLeads(page, activeLeadType, companySize, searchTerm);
+    }
+  };
+
+  const handleDropOnGroup = (targetGroup: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverGroup(null);
+    setDragOverTab(null);
+    const droppedUrl = e.dataTransfer.getData("text/plain") || draggingLeadUrl;
+    setDraggingLeadUrl(null);
+    if (!droppedUrl) return;
+
+    if (selectedLeadUrls.has(droppedUrl) && selectedLeadUrls.size > 1) {
+      handleBulkLeadTypeChange(targetGroup);
+      return;
+    }
+
+    const currentLead =
+      expandedLeads.find((l: any) => l.job_url === droppedUrl) ||
+      leads.find((l: any) => l.job_url === droppedUrl);
+    const currentType = (currentLead?.lead_type || "others").toLowerCase();
+    const normalizedTarget = targetGroup.toLowerCase();
+    const normalizedCurrent =
+      currentType !== "company" && currentType !== "personal" ? "others" : currentType;
+    if (normalizedCurrent === normalizedTarget) return;
+
+    handleLeadTypeChange(droppedUrl, targetGroup);
+  };
+
+  const patchLeadLocal = (job_url: string, patch: Record<string, any>) => {
+    setExpandedLeads((prev) => prev.map((l) => (l.job_url === job_url ? { ...l, ...patch } : l)));
+    setLeads((prev) => prev.map((l) => (l.job_url === job_url ? { ...l, ...patch } : l)));
+    setSelectedLead((prev: any) => (prev?.job_url === job_url ? { ...prev, ...patch } : prev));
+  };
+
+  const handleOutreachUpdate = async (
+    job_url: string,
+    patch: {
+      outreach_mode?: string;
+      outreach_state?: string;
+      outreach_stage?: number;
+      next_send_at?: string;
+    }
+  ) => {
+    patchLeadLocal(job_url, patch);
+    try {
+      const res = await api.updateLeadOutreach({ job_url, ...patch });
+      if (res.lead) patchLeadLocal(job_url, res.lead);
+      onToast("Outreach updated", "success");
+    } catch (e: any) {
+      onToast(e.message || "Failed to update outreach", "error");
+      if (expandedJobId) {
+        try {
+          const res = await api.getLeads({ scheduled_job_id: expandedJobId, limit: 100 });
+          setExpandedLeads(res.leads || res.data || []);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  };
+
+  const handleBulkOutreach = async (patch: {
+    outreach_mode?: string;
+    outreach_state?: string;
+  }) => {
+    const urls = [...selectedLeadUrls];
+    if (!urls.length) return;
+    try {
+      await api.bulkUpdateLeadOutreach({ job_urls: urls, ...patch });
+      setExpandedLeads((prev) =>
+        prev.map((l) => (selectedLeadUrls.has(l.job_url) ? { ...l, ...patch } : l))
+      );
+      setSelectedLeadUrls(new Set());
+      onToast(`${urls.length} leads updated`, "success");
+      if (expandedJobId) {
+        const res = await api.getLeads({ scheduled_job_id: expandedJobId, limit: 100 });
+        setExpandedLeads(res.leads || res.data || []);
+      }
+    } catch (e: any) {
+      onToast(e.message || "Bulk outreach update failed", "error");
+    }
+  };
+
+  const handleRunDueOutreach = async () => {
+    try {
+      const res = await api.runDueOutreach();
+      onToast(`Outreach run: ${res.sent || 0} sent, ${res.failed || 0} failed, ${res.skipped || 0} skipped`, "success");
+      if (expandedJobId) {
+        const reload = await api.getLeads({ scheduled_job_id: expandedJobId, limit: 100 });
+        setExpandedLeads(reload.leads || reload.data || []);
+      }
+    } catch (e: any) {
+      onToast(e.message || "Failed to run due outreach", "error");
+    }
+  };
+
+  const bulkTypeBar =
+    selectedLeadUrls.size === 0 ? null : (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginBottom: "10px",
+          padding: "8px 12px",
+          borderRadius: "8px",
+          border: "1px solid var(--border-color)",
+          background: "var(--chip-bg)",
+        }}
+      >
+        <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary)" }}>
+          {selectedLeadUrls.size} selected
+        </span>
+        {(
+          [
+            { key: "company", label: "🏢 Company" },
+            { key: "personal", label: "👤 Personal" },
+            { key: "others", label: "❓ Others" },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleBulkLeadTypeChange(opt.key)}
+            style={{ fontSize: "0.75rem", padding: "3px 10px" }}
+          >
+            {opt.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setSelectedLeadUrls(new Set())}
+          style={{
+            marginLeft: "auto",
+            background: "none",
+            border: "none",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            fontSize: "0.75rem",
+          }}
+        >
+          Clear
+        </button>
+      </div>
+    );
 
   // Handle immediate trigger for a scheduled job
   const handleRunJobNow = async (jobId: string) => {
@@ -408,7 +640,10 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
             }}
           >
             <button
-              onClick={() => setViewMode("scheduled_jobs")}
+              onClick={() => {
+                setViewMode("scheduled_jobs");
+                setSelectedLeadUrls(new Set());
+              }}
               style={{
                 padding: "7px 14px",
                 border: "none",
@@ -437,7 +672,43 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
               Scraping Tasks ({scheduledTotal})
             </button>
             <button
-              onClick={() => setViewMode("all_leads")}
+              onClick={() => {
+                setViewMode("outreach");
+                setSelectedLeadUrls(new Set());
+                loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
+              }}
+              style={{
+                padding: "7px 14px",
+                border: "none",
+                borderRadius: "7px",
+                background:
+                  viewMode === "outreach"
+                    ? "linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))"
+                    : "transparent",
+                color: viewMode === "outreach" ? "#fff" : "var(--text-secondary)",
+                fontWeight: viewMode === "outreach" ? 600 : 500,
+                cursor: "pointer",
+                fontSize: "0.84rem",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                boxShadow:
+                  viewMode === "outreach"
+                    ? "0 1px 4px rgba(6, 182, 212, 0.35)"
+                    : "none",
+                transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
+              }}
+            >
+              <Mail style={{ width: "14px", height: "14px", flexShrink: 0 }} />
+              Outreach Automation
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("all_leads");
+                setSelectedLeadUrls(new Set());
+              }}
               style={{
                 padding: "7px 14px",
                 border: "none",
@@ -490,7 +761,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
           {/* Refresh Current View */}
           <button
             onClick={() => {
-              if (viewMode === "scheduled_jobs") loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
+              if (viewMode === "scheduled_jobs" || viewMode === "outreach") loadScheduledJobs(scheduledPage, scheduledSearch, scheduledStatus);
               else loadLeads(page);
             }}
             className="btn-icon-ghost"
@@ -522,15 +793,34 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
       {/* VIEW 1: SCHEDULED SCRAPING JOBS TABLE (The exact requested primary view)  */}
       {/* Columns: ID | JObTiTle | Target Location | Company Size | Scraping Limit | Scheduled date | created at | Updated at | Actions */}
       {/* ========================================================================= */}
-      {viewMode === "scheduled_jobs" && (
+      {(viewMode === "scheduled_jobs" || viewMode === "outreach") && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {/* Subheader & Filters Bar */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.8rem" }}>
-            <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Clock style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
-              <span>
-                Daily Autonomous Engine scheduled to run automatically everyday at <strong>10:00 PM</strong> for matching jobs.
-              </span>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              {viewMode === "outreach" ? (
+                <>
+                  <Mail style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
+                  <span>
+                    Classify leads → set <strong>Automatic</strong> + <strong>Open</strong> → daily send at <strong>09:00</strong> (stage 1→2→3, +6 days). Reply? flip to <strong>Closed</strong>.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleRunDueOutreach}
+                    style={{ fontSize: "0.75rem", padding: "3px 10px" }}
+                  >
+                    Run due emails now
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Clock style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
+                  <span>
+                    Daily Autonomous Engine scheduled to run automatically everyday at <strong>10:00 PM</strong> for matching jobs.
+                  </span>
+                </>
+              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
@@ -840,7 +1130,9 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                                       <Layers style={{ width: "16px", height: "16px" }} />
                                     </div>
                                     <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
-                                      Scraped Leads for "{job.job_title}"
+                                      {viewMode === "outreach"
+                                        ? `Outreach queue for "${job.job_title}"`
+                                        : `Scraped Leads for "${job.job_title}"`}
                                     </span>
                                     <span
                                       style={{
@@ -853,7 +1145,9 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                                         borderRadius: "999px",
                                       }}
                                     >
-                                      {expandedLeads.length} leads discovered
+                                      {viewMode === "outreach"
+                                        ? `${expandedLeads.filter(leadHasEmail).length} with email`
+                                        : `${expandedLeads.length} leads discovered`}
                                     </span>
                                   </div>
 
@@ -918,11 +1212,327 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                                     <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                                       No leads scraped yet for this job. Scheduled to run automatically on {formatDate(job.scheduled_date)} at 10:00 PM.
                                     </div>
+                                  ) : viewMode === "outreach" ? (
+                                    <>
+                                      {selectedLeadUrls.size > 0 && (
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            flexWrap: "wrap",
+                                            marginBottom: "10px",
+                                            padding: "8px 12px",
+                                            borderRadius: "8px",
+                                            border: "1px solid var(--border-color)",
+                                            background: "var(--chip-bg)",
+                                          }}
+                                        >
+                                          <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                                            {selectedLeadUrls.size} selected
+                                          </span>
+                                          <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.75rem" }} onClick={() => handleBulkOutreach({ outreach_mode: "auto" })}>
+                                            Automatic
+                                          </button>
+                                          <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.75rem" }} onClick={() => handleBulkOutreach({ outreach_mode: "manual" })}>
+                                            Manual
+                                          </button>
+                                          <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.75rem" }} onClick={() => handleBulkOutreach({ outreach_state: "open" })}>
+                                            Open
+                                          </button>
+                                          <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: "0.75rem" }} onClick={() => handleBulkOutreach({ outreach_state: "closed" })}>
+                                            Closed
+                                          </button>
+                                          <button type="button" onClick={() => setSelectedLeadUrls(new Set())} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.75rem" }}>
+                                            Clear
+                                          </button>
+                                        </div>
+                                      )}
+                                      {(
+                                        [
+                                          { key: "company", label: "🏢 Company" },
+                                          { key: "personal", label: "👤 Personal" },
+                                          { key: "others", label: "❓ Others" },
+                                        ] as const
+                                      ).map((group) => {
+                                        const groupLeads = expandedLeads.filter((l: any) => {
+                                          if (!leadHasEmail(l)) return false;
+                                          const t = (l.lead_type || "others").toLowerCase();
+                                          if (group.key === "others") return t !== "company" && t !== "personal";
+                                          return t === group.key;
+                                        });
+                                        const isOver = dragOverGroup === group.key;
+                                        return (
+                                          <div
+                                            key={group.key}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = "move";
+                                              if (dragOverGroup !== group.key) setDragOverGroup(group.key);
+                                            }}
+                                            onDragLeave={(e) => {
+                                              if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                                              setDragOverGroup(null);
+                                            }}
+                                            onDrop={(e) => handleDropOnGroup(group.key, e)}
+                                            style={{
+                                              marginBottom: "16px",
+                                              padding: "8px 10px",
+                                              borderRadius: "10px",
+                                              border: isOver ? "2px dashed var(--accent-cyan)" : "1px solid transparent",
+                                              background: isOver ? "rgba(6, 182, 212, 0.06)" : "transparent",
+                                              transition: "all 0.15s ease",
+                                            }}
+                                          >
+                                            <div
+                                              style={{
+                                                fontWeight: 700,
+                                                fontSize: "0.85rem",
+                                                marginBottom: "6px",
+                                                color: "var(--text-primary)",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                              }}
+                                            >
+                                              <span>{group.label}</span>
+                                              <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                                                ({groupLeads.length})
+                                              </span>
+                                              {isOver && (
+                                                <span
+                                                  style={{
+                                                    fontSize: "0.72rem",
+                                                    background: "var(--accent-cyan)",
+                                                    color: "#000",
+                                                    padding: "1px 8px",
+                                                    borderRadius: "12px",
+                                                    fontWeight: 700,
+                                                  }}
+                                                >
+                                                  Drop to classify as {group.label}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {groupLeads.length === 0 ? (
+                                              <div
+                                                style={{
+                                                  padding: "18px 12px",
+                                                  textAlign: "center",
+                                                  border: isOver
+                                                    ? "1px dashed var(--accent-cyan)"
+                                                    : "1px dashed var(--border-color)",
+                                                  borderRadius: "8px",
+                                                  background: isOver
+                                                    ? "rgba(6, 182, 212, 0.12)"
+                                                    : "var(--chip-bg)",
+                                                  color: "var(--text-muted)",
+                                                  fontSize: "0.78rem",
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  justifyContent: "center",
+                                                  gap: "6px",
+                                                }}
+                                              >
+                                                <GripVertical size={13} style={{ opacity: 0.5 }} />
+                                                {isOver
+                                                  ? `Release to classify lead as ${group.label}`
+                                                  : `No leads classified as ${group.label}. Drag leads here to reclassify.`}
+                                              </div>
+                                            ) : (
+                                              <div
+                                                className="eu-table-wrapper"
+                                                style={{
+                                                  maxHeight: "280px",
+                                                  overflowY: "auto",
+                                                  border: isOver
+                                                    ? "1px solid var(--accent-cyan)"
+                                                    : "1px solid var(--border-subtle)",
+                                                  borderRadius: "8px",
+                                                }}
+                                              >
+                                                <table className="eu-startups-table" style={{ width: "100%", fontSize: "0.8rem" }}>
+                                                  <thead>
+                                                    <tr>
+                                                      <th style={{ width: "24px" }} title="Drag handle"></th>
+                                                      <th style={{ width: "32px" }}>
+                                                        <input
+                                                          type="checkbox"
+                                                          onClick={(e) => e.stopPropagation()}
+                                                          onChange={() => toggleSelectAll(groupLeads)}
+                                                          checked={groupLeads.every(
+                                                            (l: any) => l.job_url && selectedLeadUrls.has(l.job_url)
+                                                          )}
+                                                        />
+                                                      </th>
+                                                      <th>Company</th>
+                                                      <th>Contact</th>
+                                                      <th style={{ width: "110px" }}>Auto / Manual</th>
+                                                      <th style={{ width: "100px" }}>Open / Close</th>
+                                                      <th>Template</th>
+                                                      <th style={{ width: "120px" }}>Next Send</th>
+                                                      <th style={{ width: "70px" }}>Action</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {groupLeads.map((lead: any, li: number) => {
+                                                      const isDraggingThis = draggingLeadUrl === lead.job_url;
+                                                      return (
+                                                        <tr
+                                                          key={lead._id || lead.job_url || li}
+                                                          draggable={!!lead.job_url}
+                                                          onDragStart={(e) => {
+                                                            if ((e.target as HTMLElement).closest("button, select, input, a")) {
+                                                              e.preventDefault();
+                                                              return;
+                                                            }
+                                                            e.dataTransfer.setData("text/plain", lead.job_url);
+                                                            e.dataTransfer.effectAllowed = "move";
+                                                            setDraggingLeadUrl(lead.job_url);
+                                                          }}
+                                                          onDragEnd={() => {
+                                                            setDraggingLeadUrl(null);
+                                                            setDragOverGroup(null);
+                                                          }}
+                                                          style={{
+                                                            cursor: "grab",
+                                                            opacity: isDraggingThis ? 0.35 : 1,
+                                                            background: isDraggingThis
+                                                              ? "rgba(6, 182, 212, 0.08)"
+                                                              : undefined,
+                                                            transition: "opacity 0.15s ease",
+                                                          }}
+                                                        >
+                                                          <td
+                                                            style={{
+                                                              width: "24px",
+                                                              textAlign: "center",
+                                                              color: "var(--text-muted)",
+                                                              padding: "4px 2px",
+                                                              userSelect: "none",
+                                                            }}
+                                                            title="Drag to change group (Company / Personal / Others)"
+                                                          >
+                                                            <GripVertical size={13} style={{ display: "inline-block", verticalAlign: "middle" }} />
+                                                          </td>
+                                                          <td>
+                                                            <input
+                                                              type="checkbox"
+                                                              checked={!!lead.job_url && selectedLeadUrls.has(lead.job_url)}
+                                                              disabled={!lead.job_url}
+                                                              onChange={() => toggleLeadSelect(lead.job_url)}
+                                                              onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                          </td>
+                                                          <td>
+                                                            <div style={{ fontWeight: 700 }}>{lead.company}</div>
+                                                            {lead.job_url && (
+                                                              <a
+                                                                href={lead.job_url}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                style={{ fontSize: "0.72rem", color: "var(--accent-cyan)" }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                              >
+                                                                Job post ↗
+                                                              </a>
+                                                            )}
+                                                          </td>
+                                                          <td style={{ fontSize: "0.76rem" }}>
+                                                            {(() => {
+                                                              const c = (lead.contacts || []).find(
+                                                                (x: any) => (x?.email || "").includes("@")
+                                                              );
+                                                              return c ? (
+                                                                <>
+                                                                  <div>{c.name || "Contact"}</div>
+                                                                  <div style={{ color: "var(--accent-cyan)" }}>{c.email}</div>
+                                                                </>
+                                                              ) : null;
+                                                            })()}
+                                                          </td>
+                                                          <td>
+                                                            <select
+                                                          value={lead.outreach_mode || "auto"}
+                                                          onClick={(e) => e.stopPropagation()}
+                                                          onChange={(e) => handleOutreachUpdate(lead.job_url, { outreach_mode: e.target.value })}
+                                                          style={{ fontSize: "0.72rem", padding: "2px 4px", borderRadius: "5px", border: "1px solid var(--border-color)", background: "var(--chip-bg)", width: "100%", fontWeight: 600 }}
+                                                        >
+                                                          <option value="auto">Automatic</option>
+                                                          <option value="manual">Manual</option>
+                                                            </select>
+                                                          </td>
+                                                          <td>
+                                                            <select
+                                                              value={lead.outreach_state || "open"}
+                                                              onClick={(e) => e.stopPropagation()}
+                                                              onChange={(e) => handleOutreachUpdate(lead.job_url, { outreach_state: e.target.value })}
+                                                              style={{
+                                                                fontSize: "0.72rem",
+                                                                padding: "2px 4px",
+                                                                borderRadius: "5px",
+                                                                border: "1px solid var(--border-color)",
+                                                                background: (lead.outreach_state || "open") === "open" ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.1)",
+                                                                color: (lead.outreach_state || "open") === "open" ? "#10b981" : "#ef4444",
+                                                                width: "100%",
+                                                                fontWeight: 700,
+                                                              }}
+                                                            >
+                                                              <option value="open">Open</option>
+                                                              <option value="closed">Closed</option>
+                                                            </select>
+                                                          </td>
+                                                          <td style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>{outreachTemplateLabel(lead)}</td>
+                                                          <td>
+                                                            <input
+                                                              type="date"
+                                                              value={(lead.next_send_at || "").slice(0, 10)}
+                                                              onClick={(e) => e.stopPropagation()}
+                                                              onChange={(e) => handleOutreachUpdate(lead.job_url, { next_send_at: e.target.value })}
+                                                              style={{ fontSize: "0.72rem", padding: "2px 4px", borderRadius: "5px", border: "1px solid var(--border-color)", background: "var(--chip-bg)", width: "100%" }}
+                                                            />
+                                                          </td>
+                                                          <td>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedLead(lead);
+                                                              }}
+                                                              className="btn btn-secondary btn-sm"
+                                                              style={{ fontSize: "0.72rem", padding: "2px 7px" }}
+                                                            >
+                                                              Details
+                                                            </button>
+                                                          </td>
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </>
                                   ) : (
-                                    <div className="eu-table-wrapper" style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}>
+                                    <>
+                                      {bulkTypeBar}
+                                      <div className="eu-table-wrapper" style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}>
                                       <table className="eu-startups-table" style={{ width: "100%", fontSize: "0.82rem" }}>
                                         <thead>
                                           <tr>
+                                            <th style={{ width: "36px" }}>
+                                              <input
+                                                type="checkbox"
+                                                checked={
+                                                  expandedLeads.length > 0 &&
+                                                  expandedLeads.every((l: any) => l.job_url && selectedLeadUrls.has(l.job_url))
+                                                }
+                                                onChange={() => toggleSelectAll(expandedLeads)}
+                                                onClick={(e) => e.stopPropagation()}
+                                              />
+                                            </th>
                                             <th>Company &amp; Website</th>
                                             <th>Location</th>
                                             <th>Key Decision Makers &amp; Direct Emails</th>
@@ -934,6 +1544,15 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                                         <tbody>
                                           {expandedLeads.map((lead: any, li: number) => (
                                             <tr key={lead._id || li}>
+                                              <td>
+                                                <input
+                                                  type="checkbox"
+                                                  checked={!!lead.job_url && selectedLeadUrls.has(lead.job_url)}
+                                                  disabled={!lead.job_url}
+                                                  onChange={() => toggleLeadSelect(lead.job_url)}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                />
+                                              </td>
                                               <td>
                                                 <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{lead.company}</div>
                                                 {lead.company_domain && (
@@ -989,6 +1608,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                                         </tbody>
                                       </table>
                                     </div>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1092,50 +1712,84 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
               { key: "company", label: "🏢 Company", count: typeCounts.company },
               { key: "personal", label: "👤 Personal", count: typeCounts.personal },
               { key: "others", label: "❓ Others", count: typeCounts.others },
-            ] as const).map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => {
-                  setActiveLeadType(tab.key);
-                  setPage(1);
-                }}
-                style={{
-                  padding: "0.5rem 1rem",
-                  border: "none",
-                  borderBottom: activeLeadType === tab.key ? "2px solid var(--accent-cyan)" : "2px solid transparent",
-                  background: "transparent",
-                  color: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--text-muted)",
-                  fontWeight: activeLeadType === tab.key ? 600 : 400,
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  transition: "all 0.2s",
-                }}
-              >
-                {tab.label}
-                <span
+            ] as const).map((tab) => {
+              const isTabDropActive = dragOverTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => {
+                    setActiveLeadType(tab.key);
+                    setPage(1);
+                  }}
+                  onDragOver={(e) => {
+                    if (tab.key === "all") return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dragOverTab !== tab.key) setDragOverTab(tab.key);
+                  }}
+                  onDragLeave={(e) => {
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                    setDragOverTab(null);
+                  }}
+                  onDrop={(e) => {
+                    if (tab.key === "all") return;
+                    handleDropOnGroup(tab.key, e);
+                  }}
                   style={{
-                    background: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--border-color)",
-                    color: activeLeadType === tab.key ? "#fff" : "var(--text-muted)",
-                    borderRadius: "999px",
-                    padding: "1px 7px",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
+                    padding: "0.5rem 1rem",
+                    border: "none",
+                    borderBottom: isTabDropActive
+                      ? "2px dashed var(--accent-cyan)"
+                      : activeLeadType === tab.key
+                      ? "2px solid var(--accent-cyan)"
+                      : "2px solid transparent",
+                    background: isTabDropActive ? "rgba(6, 182, 212, 0.15)" : "transparent",
+                    color: isTabDropActive || activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--text-muted)",
+                    fontWeight: activeLeadType === tab.key ? 600 : 400,
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.2s",
+                    borderRadius: isTabDropActive ? "6px 6px 0 0" : undefined,
                   }}
                 >
-                  {tab.count}
-                </span>
-              </button>
-            ))}
+                  {tab.label}
+                  <span
+                    style={{
+                      background: activeLeadType === tab.key ? "var(--accent-cyan)" : "var(--border-color)",
+                      color: activeLeadType === tab.key ? "#fff" : "var(--text-muted)",
+                      borderRadius: "999px",
+                      padding: "1px 7px",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Flat Leads Table */}
+          {bulkTypeBar}
           <div className="eu-table-wrapper">
             <table className="eu-startups-table">
               <thead>
                 <tr>
+                  <th style={{ width: "24px" }} title="Drag handle"></th>
+                  <th style={{ width: "36px" }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        leads.length > 0 &&
+                        leads.every((l) => l.job_url && selectedLeadUrls.has(l.job_url))
+                      }
+                      onChange={() => toggleSelectAll(leads)}
+                    />
+                  </th>
                   <th>Company &amp; Domain</th>
                   <th>Location</th>
                   <th>Date Posted &amp; Scraped</th>
@@ -1147,7 +1801,7 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "40px" }}>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "40px" }}>
                       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
                         <div className="spinner" />
                         <span>Loading database leads...</span>
@@ -1156,13 +1810,57 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                   </tr>
                 ) : leads.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                       No leads found matching filter criteria.
                     </td>
                   </tr>
                 ) : (
-                  leads.map((lead, idx) => (
-                    <tr key={lead._id || idx}>
+                  leads.map((lead, idx) => {
+                    const isDraggingThis = draggingLeadUrl === lead.job_url;
+                    return (
+                    <tr
+                      key={lead._id || idx}
+                      draggable={!!lead.job_url}
+                      onDragStart={(e) => {
+                        if ((e.target as HTMLElement).closest("button, select, input, a")) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.dataTransfer.setData("text/plain", lead.job_url);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDraggingLeadUrl(lead.job_url);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingLeadUrl(null);
+                        setDragOverTab(null);
+                      }}
+                      style={{
+                        cursor: "grab",
+                        opacity: isDraggingThis ? 0.35 : 1,
+                        background: isDraggingThis ? "rgba(6, 182, 212, 0.08)" : undefined,
+                        transition: "opacity 0.15s ease",
+                      }}
+                    >
+                      <td
+                        style={{
+                          width: "24px",
+                          textAlign: "center",
+                          color: "var(--text-muted)",
+                          padding: "6px 2px",
+                          userSelect: "none",
+                        }}
+                        title="Drag to category tab (Company, Personal, Others)"
+                      >
+                        <GripVertical size={13} style={{ display: "inline-block", verticalAlign: "middle" }} />
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={!!lead.job_url && selectedLeadUrls.has(lead.job_url)}
+                          disabled={!lead.job_url}
+                          onChange={() => toggleLeadSelect(lead.job_url)}
+                        />
+                      </td>
                       <td>
                         <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.92rem" }}>
                           {lead.company || "Unnamed Company"}
@@ -1249,12 +1947,14 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                           onClick={() => setSelectedLead(lead)}
                           className="btn btn-secondary btn-sm"
                           style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          title="View Lead Details"
                         >
                           <Eye style={{ width: "12px", height: "12px" }} /> Details
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1469,6 +2169,75 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                 <div><strong>Company Size:</strong> {selectedLead.company_size || "Unspecified"}</div>
                 <div><strong>Domain:</strong> {selectedLead.company_domain || "—"}</div>
                 <div><strong>Relevance Score:</strong> {selectedLead.relevance_score || 50}/100</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <strong>Lead Type:</strong>
+                  <select
+                    value={selectedLead.lead_type || "others"}
+                    onChange={(e) => handleLeadTypeChange(selectedLead.job_url, e.target.value)}
+                    style={{
+                      fontSize: "0.76rem",
+                      padding: "2px 6px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-color)",
+                      background: "var(--chip-bg)",
+                      color: "var(--text-primary)",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <option value="company">🏢 Company</option>
+                    <option value="personal">👤 Personal</option>
+                    <option value="others">❓ Others</option>
+                  </select>
+                </div>
+                <div>
+                  <strong>LinkedIn Job:</strong>{" "}
+                  {selectedLead.job_url ? (
+                    <a
+                      href={selectedLead.job_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "3px", textDecoration: "none" }}
+                    >
+                      <ExternalLink style={{ width: "11px", height: "11px" }} />
+                      Open job post
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <strong>Mail mode:</strong>
+                  <select
+                    value={selectedLead.outreach_mode || "auto"}
+                    onChange={(e) => handleOutreachUpdate(selectedLead.job_url, { outreach_mode: e.target.value })}
+                    style={{ fontSize: "0.76rem", padding: "2px 6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--chip-bg)", fontWeight: 600 }}
+                  >
+                    <option value="auto">Automatic</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <strong>Status:</strong>
+                  <select
+                    value={selectedLead.outreach_state || "open"}
+                    onChange={(e) => handleOutreachUpdate(selectedLead.job_url, { outreach_state: e.target.value })}
+                    style={{ fontSize: "0.76rem", padding: "2px 6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--chip-bg)", fontWeight: 700 }}
+                  >
+                    <option value="open">Open</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+                <div><strong>Template:</strong> {outreachTemplateLabel(selectedLead)}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <strong>Next send:</strong>
+                  <input
+                    type="date"
+                    value={(selectedLead.next_send_at || "").slice(0, 10)}
+                    onChange={(e) => handleOutreachUpdate(selectedLead.job_url, { next_send_at: e.target.value })}
+                    style={{ fontSize: "0.76rem", padding: "2px 6px", borderRadius: "6px", border: "1px solid var(--border-color)", background: "var(--chip-bg)" }}
+                  />
+                </div>
               </div>
 
               {selectedLead.contacts && selectedLead.contacts.length > 0 && (
@@ -1599,6 +2368,51 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                       value={manualForm.location}
                       onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
                     />
+                  </div>
+                </div>
+
+                {/* Lead Type Classification */}
+                <div className="form-group">
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ fontWeight: 600 }}>Lead Type *</span>
+                    <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Target Classification</span>
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.6rem" }}>
+                    {[
+                      { key: "company", icon: "🏢", label: "Company", desc: "Finding a company / agency" },
+                      { key: "personal", icon: "👤", label: "Personal", desc: "Finding person / freelancer" },
+                      { key: "others", icon: "❓", label: "Others", desc: "Unspecified / General" },
+                    ].map((t) => (
+                      <div
+                        key={t.key}
+                        onClick={() => setManualForm({ ...manualForm, lead_type: t.key })}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: manualForm.lead_type === t.key ? "2px solid var(--accent-cyan)" : "1px solid var(--border-color)",
+                          background: manualForm.lead_type === t.key ? "rgba(6, 182, 212, 0.12)" : "var(--chip-bg)",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "3px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "1rem" }}>{t.icon}</span>
+                          <span style={{
+                            fontWeight: manualForm.lead_type === t.key ? 700 : 600,
+                            fontSize: "0.86rem",
+                            color: manualForm.lead_type === t.key ? "var(--accent-cyan)" : "var(--text-primary)"
+                          }}>
+                            {t.label}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1.3 }}>
+                          {t.desc}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

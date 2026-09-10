@@ -107,6 +107,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ job_url, lead_type }),
     }),
+  updateLeadOutreach: (payload: {
+    job_url: string;
+    outreach_mode?: string;
+    outreach_state?: string;
+    outreach_stage?: number;
+    next_send_at?: string;
+  }) =>
+    fetchJson("/api/leads/update-outreach", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  bulkUpdateLeadOutreach: (payload: {
+    job_urls: string[];
+    outreach_mode?: string;
+    outreach_state?: string;
+    outreach_stage?: number;
+    next_send_at?: string;
+  }) =>
+    fetchJson("/api/leads/bulk-update-outreach", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  runDueOutreach: () =>
+    fetchJson("/api/leads/outreach/run-due", { method: "POST" }),
 
   // Instant Agent Lab & Research Leads
   runAgentResearch: (payload: any) =>
