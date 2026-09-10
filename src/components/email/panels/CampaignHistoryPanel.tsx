@@ -9,6 +9,26 @@ export interface CampaignHistoryPanelProps {
   onLaunchDraft: (campaign: Campaign) => void;
   onOpenLogs: (campaign: Campaign) => void;
   onDeleteCampaign: (id: string) => void;
+  onManageSequence?: (campaign: Campaign) => void;
+}
+
+function formatRelative(isoString?: string) {
+  if (!isoString) return "";
+  try {
+    const diffMs = new Date(isoString).getTime() - Date.now();
+    if (isNaN(diffMs)) return "";
+    if (diffMs <= 60000 && diffMs >= -60000) return "due now";
+    if (diffMs < 0) return "past due";
+    const totalMins = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMins / (24 * 60));
+    const hours = Math.floor((totalMins % (24 * 60)) / 60);
+    const mins = totalMins % 60;
+    if (days > 0) return `in ${days}d ${hours}h`;
+    if (hours > 0) return `in ${hours}h ${mins}m`;
+    return `in ${mins}m`;
+  } catch {
+    return "";
+  }
 }
 
 export function CampaignHistoryPanel({
@@ -18,6 +38,7 @@ export function CampaignHistoryPanel({
   onLaunchDraft,
   onOpenLogs,
   onDeleteCampaign,
+  onManageSequence,
 }: CampaignHistoryPanelProps) {
   return (
     <div className="glass-card">
@@ -85,22 +106,45 @@ export function CampaignHistoryPanel({
                     >
                       {c.name}
                       {c.campaign_type === "sequence" && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            fontSize: "0.68rem",
-                            padding: "2px 7px",
-                            borderRadius: "99px",
-                            background: "rgba(99,102,241,0.15)",
-                            color: "var(--accent-violet)",
-                            fontWeight: 700,
-                          }}
-                        >
-                          <GitBranch style={{ width: "9px", height: "9px" }} />
-                          Sequence
-                        </span>
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "3px", flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              fontSize: "0.68rem",
+                              padding: "2px 7px",
+                              borderRadius: "99px",
+                              background: "rgba(99,102,241,0.15)",
+                              color: "var(--accent-violet)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            <GitBranch style={{ width: "9px", height: "9px" }} />
+                            Sequence ({c.completed_steps || 0}/{c.total_steps || "?"})
+                          </span>
+                          {c.next_step ? (
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                padding: "2px 7px",
+                                borderRadius: "4px",
+                                background: c.next_step.status === "paused" ? "rgba(245, 158, 11, 0.15)" : "rgba(99, 102, 241, 0.1)",
+                                color: c.next_step.status === "paused" ? "var(--accent-amber)" : "var(--accent-violet)",
+                                fontWeight: 600,
+                              }}
+                              title={c.next_step.scheduled_at ? `Scheduled: ${new Date(c.next_step.scheduled_at).toLocaleString()}` : undefined}
+                            >
+                              {c.next_step.status === "paused"
+                                ? `⏸️ Step ${c.next_step.step_number} Paused`
+                                : `⏰ Step ${c.next_step.step_number} fires ${formatRelative(c.next_step.scheduled_at)}`}
+                            </span>
+                          ) : c.completed_steps && c.total_steps && c.completed_steps >= c.total_steps ? (
+                            <span style={{ fontSize: "0.68rem", color: "#10b981", fontWeight: 600 }}>
+                              ✓ All {c.total_steps} steps sent
+                            </span>
+                          ) : null}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -174,6 +218,22 @@ export function CampaignHistoryPanel({
                           }}
                         >
                           <Rocket style={{ width: "12px", height: "12px" }} /> Launch
+                        </button>
+                      )}
+                      {c.campaign_type === "sequence" && onManageSequence && (
+                        <button
+                          onClick={() => onManageSequence(c)}
+                          className="btn btn-secondary btn-sm"
+                          title="View Drip Schedule & Edit Next Email Controls"
+                          style={{
+                            color: "var(--accent-violet)",
+                            borderColor: "rgba(99, 102, 241, 0.3)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <Clock style={{ width: "12px", height: "12px" }} /> Drip Schedule
                         </button>
                       )}
                       <button

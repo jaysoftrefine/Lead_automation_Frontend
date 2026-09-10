@@ -93,10 +93,29 @@ export interface QueueItem {
   [key: string]: any;
 }
 
+export interface SequenceStepItem {
+  id: string;
+  campaign_id: string;
+  step_number: number;
+  template_id: string;
+  template_name?: string;
+  subject?: string;
+  days_after: number;
+  status: "pending" | "running" | "completed" | "failed" | "paused" | "skipped" | string;
+  scheduled_at?: string;
+  fired_at?: string;
+  sent_count?: number;
+  failed_count?: number;
+  reminder_sent?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
 export interface Campaign {
   id: string;
   name: string;
-  status: "draft" | "running" | "completed" | "failed" | "stopped" | string;
+  status: "draft" | "running" | "completed" | "failed" | "stopped" | "scheduled" | "paused" | string;
   template_id?: string;
   audience_id?: string;
   audience_filter?: string;
@@ -111,6 +130,11 @@ export interface Campaign {
   completed_at?: string;
   template_name?: string;
   audience_name?: string;
+  campaign_type?: "one_shot" | "sequence" | string;
+  start_date?: string;
+  total_steps?: number;
+  completed_steps?: number;
+  next_step?: SequenceStepItem | null;
   [key: string]: any;
 }
 

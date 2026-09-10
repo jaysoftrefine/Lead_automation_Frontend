@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Rocket,
   Save,
@@ -56,6 +56,10 @@ export interface CampaignCreatePanelProps {
   onSendTest: () => void;
   sendingTest: boolean;
   onToast: (msg: string, type?: string) => void;
+  initialSequenceMode?: boolean;
+  initialSteps?: SequenceStepDraft[];
+  initialReminderEmail?: string;
+  initialReminderHoursBefore?: number;
 }
 
 export function CampaignCreatePanel({
@@ -89,17 +93,40 @@ export function CampaignCreatePanel({
   onSendTest,
   sendingTest,
   onToast,
+  initialSequenceMode,
+  initialSteps,
+  initialReminderEmail,
+  initialReminderHoursBefore,
 }: CampaignCreatePanelProps) {
   const [bulkPreviewMode, setBulkPreviewMode] = useState<"rendered" | "source">("rendered");
 
   // ── Sequence Campaign State ──────────────────────────────────
-  const [sequenceMode, setSequenceMode] = useState(false);
-  const [steps, setSteps] = useState<SequenceStepDraft[]>([
-    { template_id: "", days_after: 0 },
-    { template_id: "", days_after: 7 },
-  ]);
-  const [reminderEmail, setReminderEmail] = useState("");
-  const [reminderHoursBefore, setReminderHoursBefore] = useState(24);
+  const [sequenceMode, setSequenceMode] = useState(initialSequenceMode || false);
+  const [steps, setSteps] = useState<SequenceStepDraft[]>(
+    initialSteps && initialSteps.length > 0
+      ? initialSteps
+      : [
+          { template_id: "", days_after: 0 },
+          { template_id: "", days_after: 7 },
+        ]
+  );
+  const [reminderEmail, setReminderEmail] = useState(initialReminderEmail || "");
+  const [reminderHoursBefore, setReminderHoursBefore] = useState(initialReminderHoursBefore || 24);
+  const [audienceError, setAudienceError] = useState(false);
+
+  const isAudienceSelected =
+    Boolean(campAudienceId?.trim()) ||
+    Boolean(campSources?.sqlite) ||
+    Boolean(campSources?.mongo) ||
+    Boolean(campSources?.manual) ||
+    (Array.isArray(selectedContacts) && selectedContacts.length > 0);
+
+  useEffect(() => {
+    if (initialSequenceMode !== undefined) setSequenceMode(initialSequenceMode);
+    if (initialSteps && initialSteps.length > 0) setSteps(initialSteps);
+    if (initialReminderEmail !== undefined) setReminderEmail(initialReminderEmail);
+    if (initialReminderHoursBefore !== undefined) setReminderHoursBefore(initialReminderHoursBefore);
+  }, [initialSequenceMode, initialSteps, initialReminderEmail, initialReminderHoursBefore]);
 
   const addStep = () => {
     const lastDays = steps.length > 0 ? steps[steps.length - 1].days_after : 0;
@@ -389,6 +416,7 @@ export function CampaignCreatePanel({
               onChange={(e) => {
                 const audId = e.target.value;
                 setCampAudienceId(audId);
+                if (audId) setAudienceError(false);
                 const aud = audiences.find((a) => a.id === audId);
                 if (aud) {
                   onAudienceSelected(aud);
@@ -396,6 +424,14 @@ export function CampaignCreatePanel({
                   onClearAudienceSelection();
                 }
               }}
+              style={
+                audienceError && !isAudienceSelected
+                  ? {
+                      borderColor: "#fb7185",
+                      boxShadow: "0 0 0 1px #fb7185, 0 0 10px rgba(251, 113, 133, 0.2)",
+                    }
+                  : undefined
+              }
             >
               <option value="">— Select a saved audience —</option>
               {audiences.map((a: any) => {
@@ -409,6 +445,21 @@ export function CampaignCreatePanel({
                 );
               })}
             </select>
+            {audienceError && !isAudienceSelected && (
+              <div
+                style={{
+                  color: "#fb7185",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  marginTop: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <span>⚠️ Target Audience is required. Please select an audience before proceeding.</span>
+              </div>
+            )}
           </div>
 
           {/* ── Sequence / Drip Campaign Toggle ─────────────────────── */}
@@ -723,7 +774,19 @@ export function CampaignCreatePanel({
               <button
                 type="button"
                 disabled={loadingPreview}
-                onClick={onGeneratePreview}
+                onClick={() => {
+                  if (!isAudienceSelected) {
+                    setAudienceError(true);
+                    onToast("Please select a Target Audience to generate previews", "error");
+                    const el = document.getElementById("camp-audience");
+                    if (el) {
+                      el.focus();
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                    return;
+                  }
+                  onGeneratePreview();
+                }}
                 className="btn btn-preview-email"
                 style={{
                   height: "44px",
@@ -742,6 +805,16 @@ export function CampaignCreatePanel({
                 onClick={() => {
                   if (!campName.trim()) {
                     onToast("Please enter a Campaign Name", "error");
+                    return;
+                  }
+                  if (!isAudienceSelected) {
+                    setAudienceError(true);
+                    onToast("Please select a Target Audience before proceeding to the next page", "error");
+                    const el = document.getElementById("camp-audience");
+                    if (el) {
+                      el.focus();
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
                     return;
                   }
                   if (sequenceMode) {
@@ -778,7 +851,23 @@ export function CampaignCreatePanel({
             <button
               type="button"
               disabled={launching}
-              onClick={() => onLaunchCampaign(seqOpts)}
+              onClick={() => {
+                if (!campName.trim()) {
+                  onToast("Please enter a Campaign Name", "error");
+                  return;
+                }
+                if (!isAudienceSelected) {
+                  setAudienceError(true);
+                  onToast("Please select a Target Audience before launching", "error");
+                  const el = document.getElementById("camp-audience");
+                  if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                  return;
+                }
+                onLaunchCampaign(seqOpts);
+              }}
               className="btn btn-secondary"
               style={{
                 height: "42px",

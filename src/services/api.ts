@@ -263,6 +263,21 @@ export const api = {
     const q = new URLSearchParams(params).toString();
     return fetchJson(`/api/email/campaigns/${id}/logs${q ? `?${q}` : ""}`);
   },
+  getCampaignSteps: (campaignId: string | number) =>
+    fetchJson(`/api/email/campaigns/${campaignId}/steps`),
+  updateCampaignStep: (campaignId: string | number, stepId: string, payload: any) =>
+    fetchJson(`/api/email/campaigns/${campaignId}/steps/${stepId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  fireSequenceStepNow: (campaignId: string | number, stepId: string) =>
+    fetchJson(`/api/email/campaigns/${campaignId}/steps/${stepId}/fire-now`, {
+      method: "POST",
+    }),
+  toggleCampaignPause: (campaignId: string | number) =>
+    fetchJson(`/api/email/campaigns/${campaignId}/toggle-pause`, {
+      method: "POST",
+    }),
 
   // Audiences (Recipient Lists)
   getAudiences: () => fetchJson("/api/email/audiences"),

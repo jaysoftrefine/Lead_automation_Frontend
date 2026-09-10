@@ -27,6 +27,7 @@ import {
   type GeneratedEmailItem,
 } from "../components/email/modals/GeneratedPreviewModal";
 import { CampaignLogsModal } from "../components/email/modals/CampaignLogsModal";
+import { SequenceScheduleModal } from "../components/email/modals/SequenceScheduleModal";
 
 export type EmailPanelTab =
   | "templates"
@@ -91,12 +92,17 @@ export function EmailCampaigns({
   const [savingDraft, setSavingDraft] = useState(false);
   const [selectedCampaignSmtpId, setSelectedCampaignSmtpId] = useState("");
 
-  // Modals
+  // Modals & Sequence Schedule State
   const [showSmtpModal, setShowSmtpModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [generatedEmails, setGeneratedEmails] = useState<GeneratedEmailItem[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [logsModalCampaign, setLogsModalCampaign] = useState<Campaign | null>(null);
+  const [sequenceModalCampaign, setSequenceModalCampaign] = useState<Campaign | null>(null);
+  const [editSequenceMode, setEditSequenceMode] = useState(false);
+  const [editSequenceSteps, setEditSequenceSteps] = useState<any[]>([]);
+  const [editReminderEmail, setEditReminderEmail] = useState("");
+  const [editReminderHoursBefore, setEditReminderHoursBefore] = useState(24);
 
   // Initial Data Load
   const loadTemplates = async () => {
@@ -605,6 +611,30 @@ export function EmailCampaigns({
       setCampDelay(config.delay_seconds);
     }
 
+    if (c.campaign_type === "sequence") {
+      setEditSequenceMode(true);
+      setEditReminderEmail(c.reminder_email || "");
+      setEditReminderHoursBefore(c.reminder_hours_before || 24);
+      api
+        .getCampaignSteps(c.id)
+        .then((res: any) => {
+          if (res.data && res.data.length > 0) {
+            setEditSequenceSteps(
+              res.data.map((s: any) => ({
+                template_id: s.template_id,
+                days_after: s.days_after,
+              }))
+            );
+          }
+        })
+        .catch(() => {});
+    } else {
+      setEditSequenceMode(false);
+      setEditSequenceSteps([]);
+      setEditReminderEmail("");
+      setEditReminderHoursBefore(24);
+    }
+
     setActivePanel("create");
     onToast(`Loaded "${c.name}" for editing`, "info");
   };
@@ -619,6 +649,10 @@ export function EmailCampaigns({
     setSelectedContacts([]);
     setCampCountry("");
     setCampCategory("");
+    setEditSequenceMode(false);
+    setEditSequenceSteps([]);
+    setEditReminderEmail("");
+    setEditReminderHoursBefore(24);
     const def = smtpAccounts.find((a) => a.is_default) || smtpAccounts[0];
     if (def) setSelectedCampaignSmtpId(def.id);
     onToast("Campaign edit cancelled. Form reset.", "info");
@@ -797,6 +831,10 @@ export function EmailCampaigns({
           onSendTest={handleSendTest}
           sendingTest={sendingTest}
           onToast={(msg, type) => onToast(msg, type)}
+          initialSequenceMode={editSequenceMode}
+          initialSteps={editSequenceSteps}
+          initialReminderEmail={editReminderEmail}
+          initialReminderHoursBefore={editReminderHoursBefore}
         />
       )}
 
@@ -828,6 +866,8 @@ export function EmailCampaigns({
           onNavigateToCreate={() => setActivePanel("create")}
           onOpenSmtpModal={() => setShowSmtpModal(true)}
           campaignProgress={campaignProgress}
+          activeCampaign={campaigns.find((c) => c.id === activeCampaignId) || null}
+          onManageSequence={(c) => setSequenceModalCampaign(c)}
         />
       )}
 
@@ -840,6 +880,7 @@ export function EmailCampaigns({
           onLaunchDraft={handleLaunchSavedCampaign}
           onOpenLogs={(c) => setLogsModalCampaign(c)}
           onDeleteCampaign={handleDeleteCampaign}
+          onManageSequence={(c) => setSequenceModalCampaign(c)}
         />
       )}
 
@@ -874,6 +915,17 @@ export function EmailCampaigns({
         onClose={() => setLogsModalCampaign(null)}
         onToast={(msg, type) => onToast(msg, type)}
       />
+
+      {/* MODAL 4: Sequence Drip Schedule & Step Controls Modal */}
+      {sequenceModalCampaign && (
+        <SequenceScheduleModal
+          campaign={sequenceModalCampaign}
+          templates={templates}
+          onClose={() => setSequenceModalCampaign(null)}
+          onToast={(msg, type) => onToast(msg, type)}
+          onCampaignUpdated={loadCampaigns}
+        />
+      )}
     </div>
   );
 }

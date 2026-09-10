@@ -10,11 +10,14 @@ import {
   Users,
   Eye,
   Save,
+  GitBranch,
+  Clock,
 } from "lucide-react";
 import type {
   EmailTemplate,
   SmtpAccount,
   CampaignProgress,
+  Campaign,
 } from "../../../types/email";
 
 export interface CampaignSendProgressPanelProps {
@@ -43,6 +46,27 @@ export interface CampaignSendProgressPanelProps {
   onNavigateToCreate: () => void;
   onOpenSmtpModal: () => void;
   campaignProgress: CampaignProgress | null;
+  activeCampaign?: Campaign | null;
+  onManageSequence?: (campaign: Campaign) => void;
+}
+
+function formatRelative(isoString?: string) {
+  if (!isoString) return "";
+  try {
+    const diffMs = new Date(isoString).getTime() - Date.now();
+    if (isNaN(diffMs)) return "";
+    if (diffMs <= 60000 && diffMs >= -60000) return "due now";
+    if (diffMs < 0) return "past due";
+    const totalMins = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMins / (24 * 60));
+    const hours = Math.floor((totalMins % (24 * 60)) / 60);
+    const mins = totalMins % 60;
+    if (days > 0) return `in ${days}d ${hours}h`;
+    if (hours > 0) return `in ${hours}h ${mins}m`;
+    return `in ${mins}m`;
+  } catch {
+    return "";
+  }
 }
 
 export function CampaignSendProgressPanel({
@@ -71,6 +95,8 @@ export function CampaignSendProgressPanel({
   onNavigateToCreate,
   onOpenSmtpModal,
   campaignProgress,
+  activeCampaign,
+  onManageSequence,
 }: CampaignSendProgressPanelProps) {
   const selectedTemplate = templates.find((t) => t.id === campTemplateId);
 
@@ -561,6 +587,102 @@ export function CampaignSendProgressPanel({
                   <span>{campaignProgress.total || 0} Total</span>
                 </div>
               </div>
+
+              {/* Sequence Drip Follow-Up Card */}
+              {(activeCampaign?.campaign_type === "sequence" || (campaignProgress as any)?.campaign_type === "sequence") && (
+                <div
+                  style={{
+                    marginTop: "6px",
+                    padding: "12px 14px",
+                    borderRadius: "8px",
+                    background: "rgba(99, 102, 241, 0.08)",
+                    border: "1px solid rgba(99, 102, 241, 0.25)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "6px",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                        color: "var(--accent-violet)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <GitBranch style={{ width: "13px", height: "13px" }} />
+                      Email Sequence (Drip Schedule)
+                    </span>
+                    {activeCampaign?.next_step && (
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          padding: "2px 7px",
+                          borderRadius: "4px",
+                          background:
+                            activeCampaign.next_step.status === "paused"
+                              ? "rgba(245, 158, 11, 0.15)"
+                              : "rgba(99, 102, 241, 0.15)",
+                          color:
+                            activeCampaign.next_step.status === "paused"
+                              ? "var(--accent-amber)"
+                              : "var(--accent-violet)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {activeCampaign.next_step.status === "paused"
+                          ? `⏸️ Step ${activeCampaign.next_step.step_number} Paused`
+                          : `⏰ Step ${activeCampaign.next_step.step_number} fires ${formatRelative(
+                              activeCampaign.next_step.scheduled_at
+                            )}`}
+                      </span>
+                    )}
+                  </div>
+
+                  {activeCampaign?.next_step?.scheduled_at && (
+                    <div
+                      style={{
+                        fontSize: "0.76rem",
+                        color: "var(--text-muted)",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      Next mail: {new Date(activeCampaign.next_step.scheduled_at).toLocaleString()}
+                    </div>
+                  )}
+
+                  {onManageSequence && activeCampaign && (
+                    <button
+                      type="button"
+                      onClick={() => onManageSequence(activeCampaign)}
+                      className="btn btn-secondary btn-sm"
+                      style={{
+                        width: "100%",
+                        color: "var(--accent-violet)",
+                        borderColor: "rgba(99, 102, 241, 0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      <Clock style={{ width: "12px", height: "12px" }} />
+                      <span>Manage Drip Schedule &amp; Step Controls</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
