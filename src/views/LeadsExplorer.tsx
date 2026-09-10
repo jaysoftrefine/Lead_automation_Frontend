@@ -396,45 +396,73 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
           </div>
 
           {/* View Mode Toggle Pill */}
-          <div style={{ display: "flex", background: "rgba(15, 23, 42, 0.5)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              background: "var(--bg-secondary)",
+              padding: "4px",
+              borderRadius: "10px",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
             <button
               onClick={() => setViewMode("scheduled_jobs")}
               style={{
-                padding: "4px 12px",
+                padding: "7px 14px",
                 border: "none",
-                borderRadius: "6px",
-                background: viewMode === "scheduled_jobs" ? "linear-gradient(135deg, #06b6d4, #3b82f6)" : "transparent",
-                color: viewMode === "scheduled_jobs" ? "#fff" : "var(--text-muted)",
-                fontWeight: viewMode === "scheduled_jobs" ? 600 : 400,
+                borderRadius: "7px",
+                background:
+                  viewMode === "scheduled_jobs"
+                    ? "linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))"
+                    : "transparent",
+                color: viewMode === "scheduled_jobs" ? "#fff" : "var(--text-secondary)",
+                fontWeight: viewMode === "scheduled_jobs" ? 600 : 500,
                 cursor: "pointer",
-                fontSize: "0.82rem",
-                display: "flex",
+                fontSize: "0.84rem",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                transition: "all 0.2s",
+                gap: "6px",
+                boxShadow:
+                  viewMode === "scheduled_jobs"
+                    ? "0 1px 4px rgba(6, 182, 212, 0.35)"
+                    : "none",
+                transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
               }}
             >
-              <Calendar style={{ width: "13px", height: "13px" }} />
+              <Calendar style={{ width: "14px", height: "14px", flexShrink: 0 }} />
               Scraping Tasks ({scheduledTotal})
             </button>
             <button
               onClick={() => setViewMode("all_leads")}
               style={{
-                padding: "4px 12px",
+                padding: "7px 14px",
                 border: "none",
-                borderRadius: "6px",
-                background: viewMode === "all_leads" ? "linear-gradient(135deg, #06b6d4, #3b82f6)" : "transparent",
-                color: viewMode === "all_leads" ? "#fff" : "var(--text-muted)",
-                fontWeight: viewMode === "all_leads" ? 600 : 400,
+                borderRadius: "7px",
+                background:
+                  viewMode === "all_leads"
+                    ? "linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))"
+                    : "transparent",
+                color: viewMode === "all_leads" ? "#fff" : "var(--text-secondary)",
+                fontWeight: viewMode === "all_leads" ? 600 : 500,
                 cursor: "pointer",
-                fontSize: "0.82rem",
-                display: "flex",
+                fontSize: "0.84rem",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                transition: "all 0.2s",
+                gap: "6px",
+                boxShadow:
+                  viewMode === "all_leads"
+                    ? "0 1px 4px rgba(6, 182, 212, 0.35)"
+                    : "none",
+                transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
               }}
             >
-              <Database style={{ width: "13px", height: "13px" }} />
+              <Database style={{ width: "14px", height: "14px", flexShrink: 0 }} />
               All Leads View ({typeCounts.all || totalResults})
             </button>
           </div>
@@ -768,118 +796,201 @@ export function LeadsExplorer({ onToast }: LeadsExplorerProps) {
                               colSpan={8}
                               style={{
                                 padding: "0 0 16px 0",
-                                background: "rgba(15, 23, 42, 0.45)",
+                                background: "var(--bg-secondary)",
                                 borderBottom: "2px solid rgba(6, 182, 212, 0.25)",
                               }}
                             >
                               <div
                                 style={{
                                   margin: "8px 16px",
-                                  padding: "16px",
-                                  borderRadius: "8px",
-                                  background: "rgba(255, 255, 255, 0.02)",
-                                  border: "1px solid rgba(6, 182, 212, 0.2)",
-                                  borderLeft: "3px solid var(--accent-cyan)",
+                                  borderRadius: "10px",
+                                  background: "var(--bg-card)",
+                                  border: "1px solid var(--border-subtle)",
+                                  boxShadow: "var(--shadow-card)",
+                                  overflow: "hidden",
                                 }}
                               >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <Layers style={{ width: "16px", height: "16px", color: "var(--accent-cyan)" }} />
-                                    <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+                                {/* Header banner section */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    padding: "12px 16px",
+                                    background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(99, 102, 241, 0.04))",
+                                    borderBottom: "1px solid var(--border-subtle)",
+                                    flexWrap: "wrap",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                                    <div
+                                      style={{
+                                        width: "28px",
+                                        height: "28px",
+                                        borderRadius: "6px",
+                                        background: "rgba(6, 182, 212, 0.15)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        color: "var(--accent-cyan)",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      <Layers style={{ width: "16px", height: "16px" }} />
+                                    </div>
+                                    <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
                                       Scraped Leads for "{job.job_title}"
                                     </span>
-                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                                      ({expandedLeads.length} leads discovered)
+                                    <span
+                                      style={{
+                                        fontSize: "0.74rem",
+                                        fontWeight: 600,
+                                        color: "var(--accent-cyan)",
+                                        background: "rgba(6, 182, 212, 0.12)",
+                                        border: "1px solid rgba(6, 182, 212, 0.25)",
+                                        padding: "2px 8px",
+                                        borderRadius: "999px",
+                                      }}
+                                    >
+                                      {expandedLeads.length} leads discovered
                                     </span>
                                   </div>
-                                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", gap: "12px" }}>
-                                    <span>📍 {job.target_location}</span>
-                                    <span>🏢 {job.company_size}</span>
-                                    <span>🎯 Goal: {job.scraping_limit} leads</span>
+
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        fontSize: "0.76rem",
+                                        color: "var(--text-secondary)",
+                                        background: "var(--bg-surface)",
+                                        padding: "3px 9px",
+                                        borderRadius: "6px",
+                                        border: "1px solid var(--border-subtle)",
+                                      }}
+                                    >
+                                      📍 {job.target_location}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        fontSize: "0.76rem",
+                                        color: "var(--text-secondary)",
+                                        background: "var(--bg-surface)",
+                                        padding: "3px 9px",
+                                        borderRadius: "6px",
+                                        border: "1px solid var(--border-subtle)",
+                                      }}
+                                    >
+                                      🏢 {job.company_size}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        fontSize: "0.76rem",
+                                        fontWeight: 600,
+                                        color: "var(--accent-cyan)",
+                                        background: "rgba(6, 182, 212, 0.1)",
+                                        padding: "3px 9px",
+                                        borderRadius: "6px",
+                                        border: "1px solid rgba(6, 182, 212, 0.25)",
+                                      }}
+                                    >
+                                      🎯 Goal: {job.scraping_limit} leads
+                                    </span>
                                   </div>
                                 </div>
 
-                                {expandedLoading ? (
-                                  <div style={{ textAlign: "center", padding: "30px" }}>
-                                    <div className="spinner" style={{ margin: "0 auto 8px" }} />
-                                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Loading scraped leads...</span>
-                                  </div>
-                                ) : expandedLeads.length === 0 ? (
-                                  <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                                    No leads scraped yet for this job. Scheduled to run automatically on {formatDate(job.scheduled_date)} at 10:00 PM.
-                                  </div>
-                                ) : (
-                                  <div className="eu-table-wrapper" style={{ maxHeight: "380px", overflowY: "auto" }}>
-                                    <table className="eu-startups-table" style={{ width: "100%", fontSize: "0.82rem" }}>
-                                      <thead>
-                                        <tr>
-                                          <th>Company &amp; Website</th>
-                                          <th>Location</th>
-                                          <th>Key Decision Makers &amp; Direct Emails</th>
-                                          <th style={{ width: "90px" }}>Size</th>
-                                          <th style={{ width: "80px" }}>Score</th>
-                                          <th style={{ width: "80px" }}>Action</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {expandedLeads.map((lead: any, li: number) => (
-                                          <tr key={lead._id || li}>
-                                            <td>
-                                              <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{lead.company}</div>
-                                              {lead.company_domain && (
-                                                <a
-                                                  href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
-                                                  target="_blank"
-                                                  rel="noreferrer"
-                                                  style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "3px" }}
-                                                >
-                                                  <Globe style={{ width: "10px", height: "10px" }} />
-                                                  {lead.company_domain}
-                                                </a>
-                                              )}
-                                            </td>
-                                            <td style={{ color: "var(--text-secondary)" }}>{lead.location || "Remote"}</td>
-                                            <td>
-                                              {lead.contacts && lead.contacts.length > 0 ? (
-                                                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                                  {lead.contacts.slice(0, 2).map((c: any, ci: number) => (
-                                                    <div key={ci} style={{ fontSize: "0.78rem" }}>
-                                                      <span style={{ fontWeight: 600 }}>{c.name || "Executive"}</span>
-                                                      <span style={{ color: "var(--text-muted)" }}> ({c.role || "Lead"})</span>
-                                                      {c.email && <div style={{ color: "var(--accent-cyan)" }}>✉ {c.email}</div>}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : (
-                                                <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Domain / No direct contact</span>
-                                              )}
-                                            </td>
-                                            <td>
-                                              <span className="size-badge" style={{ fontSize: "0.72rem" }}>{lead.company_size || "1-50"}</span>
-                                            </td>
-                                            <td>
-                                              <span style={{ fontWeight: 700, color: lead.relevance_score >= 70 ? "#10b981" : "#f59e0b" }}>
-                                                {lead.relevance_score}/100
-                                              </span>
-                                            </td>
-                                            <td>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedLead(lead);
-                                                }}
-                                                className="btn btn-secondary btn-sm"
-                                                style={{ fontSize: "0.72rem", padding: "2px 7px" }}
-                                              >
-                                                Details
-                                              </button>
-                                            </td>
+                                {/* Inner Content Area */}
+                                <div style={{ padding: "12px 16px" }}>
+                                  {expandedLoading ? (
+                                    <div style={{ textAlign: "center", padding: "30px" }}>
+                                      <div className="spinner" style={{ margin: "0 auto 8px" }} />
+                                      <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Loading scraped leads...</span>
+                                    </div>
+                                  ) : expandedLeads.length === 0 ? (
+                                    <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                                      No leads scraped yet for this job. Scheduled to run automatically on {formatDate(job.scheduled_date)} at 10:00 PM.
+                                    </div>
+                                  ) : (
+                                    <div className="eu-table-wrapper" style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-subtle)", borderRadius: "8px" }}>
+                                      <table className="eu-startups-table" style={{ width: "100%", fontSize: "0.82rem" }}>
+                                        <thead>
+                                          <tr>
+                                            <th>Company &amp; Website</th>
+                                            <th>Location</th>
+                                            <th>Key Decision Makers &amp; Direct Emails</th>
+                                            <th style={{ width: "90px" }}>Size</th>
+                                            <th style={{ width: "80px" }}>Score</th>
+                                            <th style={{ width: "80px" }}>Action</th>
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                )}
+                                        </thead>
+                                        <tbody>
+                                          {expandedLeads.map((lead: any, li: number) => (
+                                            <tr key={lead._id || li}>
+                                              <td>
+                                                <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{lead.company}</div>
+                                                {lead.company_domain && (
+                                                  <a
+                                                    href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "3px" }}
+                                                  >
+                                                    <Globe style={{ width: "10px", height: "10px" }} />
+                                                    {lead.company_domain}
+                                                  </a>
+                                                )}
+                                              </td>
+                                              <td style={{ color: "var(--text-secondary)" }}>{lead.location || "Remote"}</td>
+                                              <td>
+                                                {lead.contacts && lead.contacts.length > 0 ? (
+                                                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                                    {lead.contacts.slice(0, 2).map((c: any, ci: number) => (
+                                                      <div key={ci} style={{ fontSize: "0.78rem" }}>
+                                                        <span style={{ fontWeight: 600 }}>{c.name || "Executive"}</span>
+                                                        <span style={{ color: "var(--text-muted)" }}> ({c.role || "Lead"})</span>
+                                                        {c.email && <div style={{ color: "var(--accent-cyan)" }}>✉ {c.email}</div>}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Domain / No direct contact</span>
+                                                )}
+                                              </td>
+                                              <td>
+                                                <span className="size-badge" style={{ fontSize: "0.72rem" }}>{lead.company_size || "1-50"}</span>
+                                              </td>
+                                              <td>
+                                                <span style={{ fontWeight: 700, color: lead.relevance_score >= 70 ? "#10b981" : "#f59e0b" }}>
+                                                  {lead.relevance_score}/100
+                                                </span>
+                                              </td>
+                                              <td>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedLead(lead);
+                                                  }}
+                                                  className="btn btn-secondary btn-sm"
+                                                  style={{ fontSize: "0.72rem", padding: "2px 7px" }}
+                                                >
+                                                  Details
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </td>
                           </tr>
