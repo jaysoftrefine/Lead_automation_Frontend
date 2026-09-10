@@ -26,6 +26,18 @@ export function getPipelineWsUrl(): string {
   return `${wsProto}//${window.location.host}/api/pipeline/ws`;
 }
 
+export function getEmailCampaignsWsUrl(campaignId?: string): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  const query = campaignId ? `?campaign_id=${encodeURIComponent(campaignId)}` : "";
+  if (apiBase) {
+    const wsProto = apiBase.startsWith("https") ? "wss:" : "ws:";
+    const host = apiBase.replace(/^https?:\/\//, "");
+    return `${wsProto}//${host}/api/email/campaigns/ws${query}`;
+  }
+  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProto}//${window.location.host}/api/email/campaigns/ws${query}`;
+}
+
 // ─────────────────────────────────────────────
 // Pipeline & Scraper API
 // ─────────────────────────────────────────────

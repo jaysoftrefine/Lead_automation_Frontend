@@ -7,7 +7,7 @@ import {
   Clock,
   Settings,
 } from "lucide-react";
-import { api } from "../services/api";
+import { api, getEmailCampaignsWsUrl } from "../services/api";
 import type {
   EmailTemplate,
   Audience,
@@ -157,25 +157,69 @@ export function EmailCampaigns({
     }
   }, [showSmtpModalDirect]);
 
-  // Poll Active Campaign Execution Progress
+  // Real-time WebSocket connection for active campaign execution progress
   useEffect(() => {
     if (!activeCampaignId) return;
-    const poll = async () => {
-      try {
-        const res = await api.getCampaign(activeCampaignId);
-        const c = res.data;
-        setCampaignProgress(c);
-        if (c.status === "completed" || c.status === "failed") {
-          loadCampaigns();
+
+    let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+    let isMounted = true;
+
+    // Fetch initial state once on activation so UI renders immediately
+    api
+      .getCampaign(activeCampaignId)
+      .then((res) => {
+        if (isMounted && res.data) {
+          setCampaignProgress(res.data);
         }
+      })
+      .catch(() => {});
+
+    const connectWs = () => {
+      try {
+        const wsUrl = getEmailCampaignsWsUrl(activeCampaignId);
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "campaign_progress" && msg.data) {
+              const camp = msg.data;
+              if (camp.id === activeCampaignId) {
+                setCampaignProgress(camp);
+                if (camp.status === "completed" || camp.status === "failed") {
+                  loadCampaigns();
+                }
+              }
+            }
+          } catch {
+            // ignore non-JSON messages
+          }
+        };
+
+        ws.onclose = () => {
+          if (isMounted) {
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+
+        ws.onerror = () => {
+          if (ws) ws.close();
+        };
       } catch {
-        // ignore
+        if (isMounted) {
+          reconnectTimer = setTimeout(connectWs, 3000);
+        }
       }
     };
 
-    poll();
-    const timer = setInterval(poll, 2000);
-    return () => clearInterval(timer);
+    connectWs();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
+    };
   }, [activeCampaignId]);
 
   // Audience Handlers
