@@ -1,13 +1,29 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 export async function fetchJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  const primaryUrl = `${API_BASE}${url}`;
+  let res: Response;
+  try {
+    res = await fetch(primaryUrl, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch (networkErr) {
+    if (API_BASE && url.startsWith("/")) {
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
+      });
+    } else {
+      throw networkErr;
+    }
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.detail || data.message || `Request failed with status ${res.status}`);
@@ -68,11 +84,19 @@ export const api = {
   uploadScrapingSchedule: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-    const res = await fetch(`${apiBase}/api/pipeline/schedule/upload`, {
-      method: "POST",
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetch("/api/pipeline/schedule/upload", {
+        method: "POST",
+        body: formData,
+      });
+    } catch (err) {
+      const url = API_BASE ? `${API_BASE}/api/pipeline/schedule/upload` : "/api/pipeline/schedule/upload";
+      res = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.detail || data.message || "Failed to upload schedule file");
@@ -88,8 +112,7 @@ export const api = {
       method: "DELETE",
     }),
   getSampleScheduleTemplateUrl: (format = "csv") => {
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-    return `${apiBase}/api/pipeline/schedule-template?format=${format}`;
+    return `/api/pipeline/schedule-template?format=${format}`;
   },
   getAutomationsOverview: () => fetchJson("/api/pipeline/automations/overview"),
 

@@ -73,6 +73,16 @@ function formatDateTime(dateStr?: string | null): string {
   }
 }
 
+function hasVerifiedEmail(lead: { contacts?: any[] }): boolean {
+  return (lead.contacts || []).some(
+    (c) => c?.is_verified && typeof c?.email === "string" && c.email.includes("@")
+  );
+}
+
+function hasAnyEmail(lead: { contacts?: any[] }): boolean {
+  return (lead.contacts || []).some((c) => typeof c?.email === "string" && c.email.includes("@"));
+}
+
 export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -102,6 +112,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  const [closingLeadUrl, setClosingLeadUrl] = useState<string | null>(null);
 
   const fetchOverview = async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -232,6 +243,58 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
       onToast(e.message || `Failed to delete scheduled job`, "error");
     } finally {
       setDeletingJobId(null);
+    }
+  };
+
+  const patchLeadInMaps = (jobUrl: string, patch: Record<string, any>) => {
+    setJobLeadsMap((prev) => {
+      const next: Record<string, any[]> = {};
+      for (const [jid, leads] of Object.entries(prev)) {
+        next[jid] = leads.map((l) => (l.job_url === jobUrl ? { ...l, ...patch } : l));
+      }
+      return next;
+    });
+    setSelectedLead((prev: any) => (prev?.job_url === jobUrl ? { ...prev, ...patch } : prev));
+  };
+
+  const handleCloseTicket = async (lead: { job_url?: string; company?: string }) => {
+    if (!lead.job_url) return;
+    if (!confirm(`Close outreach for "${lead.company || "this lead"}"? It will leave the auto drip queue.`)) return;
+    setClosingLeadUrl(lead.job_url);
+    try {
+      const res = await api.updateLeadOutreach({ job_url: lead.job_url, outreach_state: "closed" });
+      const patch = res.lead || { outreach_state: "closed", next_send_at: null };
+      patchLeadInMaps(lead.job_url, patch);
+      onToast(`Closed outreach for ${lead.company || "lead"}`, "success");
+      setSelectedLead((prev: any) => (prev?.job_url === lead.job_url ? { ...prev, ...patch } : prev));
+      fetchOverview(true);
+    } catch (e: any) {
+      onToast(e.message || "Failed to close ticket", "error");
+    } finally {
+      setClosingLeadUrl(null);
+    }
+  };
+
+  const handleReopenTicket = async (lead: { job_url?: string; company?: string }) => {
+    if (!lead.job_url) return;
+    setClosingLeadUrl(lead.job_url);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await api.updateLeadOutreach({
+        job_url: lead.job_url,
+        outreach_state: "open",
+        outreach_mode: "auto",
+        next_send_at: today,
+      });
+      const patch = res.lead || { outreach_state: "open", outreach_mode: "auto", next_send_at: today };
+      patchLeadInMaps(lead.job_url, patch);
+      onToast(`Reopened outreach for ${lead.company || "lead"}`, "success");
+      setSelectedLead((prev: any) => (prev?.job_url === lead.job_url ? { ...prev, ...patch } : prev));
+      fetchOverview(true);
+    } catch (e: any) {
+      onToast(e.message || "Failed to reopen ticket", "error");
+    } finally {
+      setClosingLeadUrl(null);
     }
   };
 
@@ -652,16 +715,24 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                     const jobLeads = jobLeadsMap[job.id] || [];
                     const isLeadsLoading = jobLoadingMap[job.id];
 
-                    // Filter leads for this job
-                    const upcomingJobLeads = jobLeads.filter((l: any) => l.next_send_at && l.outreach_state !== "closed");
+                    // Only drip-ready / sent leads in this hub (no email → not shown)
+                    const upcomingJobLeads = jobLeads.filter(
+                      (l: any) =>
+                        l.next_send_at &&
+                        l.outreach_state !== "closed" &&
+                        hasVerifiedEmail(l)
+                    );
                     const pastJobLeads = jobLeads.filter((l: any) => l.last_sent_at);
+                    const actionableJobLeads = jobLeads.filter(
+                      (l: any) => hasAnyEmail(l) || l.last_sent_at
+                    );
 
                     const displayedLeads =
                       innerLeadFilter === "upcoming"
                         ? upcomingJobLeads
                         : innerLeadFilter === "history"
                         ? pastJobLeads
-                        : jobLeads;
+                        : actionableJobLeads;
 
                     return (
                       <React.Fragment key={job.id}>
@@ -964,10 +1035,10 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                   ) : displayedLeads.length === 0 ? (
                                     <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                                       {innerLeadFilter === "upcoming"
-                                        ? "No upcoming emails pending to be sent for this batch."
+                                        ? "No verified-email drips pending for this batch."
                                         : innerLeadFilter === "history"
                                         ? "No outreach emails have been sent yet for this batch."
-                                        : "No leads extracted yet for this job."}
+                                        : "No leads with email addresses for this batch (pending-research leads stay in Leads Explorer)."}
                                     </div>
                                   ) : (
                                     <div
@@ -1106,7 +1177,9 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                           {getStageLabel(lead)}
                                                         </div>
                                                       </div>
-                                                    ) : lead.next_send_at ? (
+                                                    ) : lead.outreach_state === "closed" ? (
+                                                      <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Closed</span>
+                                                    ) : lead.next_send_at && hasVerifiedEmail(lead) ? (
                                                       <div>
                                                         <span style={{ color: "var(--accent-cyan)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
                                                           <Calendar size={12} /> Next Send: {formatDate(lead.next_send_at)}
@@ -1121,7 +1194,11 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                         </div>
                                                       </div>
                                                     ) : (
-                                                      <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Manual outreach</span>
+                                                      <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>
+                                                        {hasAnyEmail(lead) && !hasVerifiedEmail(lead)
+                                                          ? "Awaiting email verification"
+                                                          : "Manual outreach"}
+                                                      </span>
                                                     )}
                                                   </td>
 
@@ -1151,6 +1228,33 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                       >
                                                         Details
                                                       </button>
+                                                      {lead.outreach_state === "closed" ? (
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleReopenTicket(lead);
+                                                          }}
+                                                          disabled={closingLeadUrl === lead.job_url}
+                                                          className="btn btn-secondary btn-sm"
+                                                          style={{ fontSize: "0.72rem", padding: "2px 8px", color: "var(--accent-emerald)" }}
+                                                          title="Reopen outreach ticket (resume auto drip)"
+                                                        >
+                                                          {closingLeadUrl === lead.job_url ? "…" : "Reopen"}
+                                                        </button>
+                                                      ) : (
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCloseTicket(lead);
+                                                          }}
+                                                          disabled={closingLeadUrl === lead.job_url}
+                                                          className="btn btn-secondary btn-sm"
+                                                          style={{ fontSize: "0.72rem", padding: "2px 8px", color: "#ef4444" }}
+                                                          title="Close this outreach ticket"
+                                                        >
+                                                          {closingLeadUrl === lead.job_url ? "…" : "Close"}
+                                                        </button>
+                                                      )}
                                                     </div>
                                                   </td>
                                                 </tr>
@@ -1421,8 +1525,27 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
               {/* Actions Footer */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "1.2rem", paddingTop: "0.8rem", borderTop: "1px solid var(--border-subtle)" }}>
                 <button onClick={() => setSelectedLead(null)} className="btn btn-secondary btn-sm" style={{ padding: "6px 14px" }}>
-                  Close
+                  Dismiss
                 </button>
+                {selectedLead.outreach_state === "closed" ? (
+                  <button
+                    onClick={() => handleReopenTicket(selectedLead)}
+                    disabled={closingLeadUrl === selectedLead.job_url}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: "6px 14px", color: "var(--accent-emerald)" }}
+                  >
+                    {closingLeadUrl === selectedLead.job_url ? "Reopening…" : "Reopen Ticket"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleCloseTicket(selectedLead)}
+                    disabled={closingLeadUrl === selectedLead.job_url}
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: "6px 14px", color: "#ef4444" }}
+                  >
+                    {closingLeadUrl === selectedLead.job_url ? "Closing…" : "Close Ticket"}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     handleRunDueOutreach();
