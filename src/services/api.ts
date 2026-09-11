@@ -91,6 +91,7 @@ export const api = {
     const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
     return `${apiBase}/api/pipeline/schedule-template?format=${format}`;
   },
+  getAutomationsOverview: () => fetchJson("/api/pipeline/automations/overview"),
 
   // Leads
   getLeads: (params: Record<string, any> = {}) => {

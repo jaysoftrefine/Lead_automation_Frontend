@@ -6,6 +6,7 @@ import { LeadsExplorer } from "./views/LeadsExplorer";
 import { InstantAgentLab } from "./views/InstantAgentLab";
 import { EUStartupsExplorer } from "./views/EUStartupsExplorer";
 import { EmailCampaigns } from "./views/EmailCampaigns";
+import { AutomationHub } from "./views/AutomationHub";
 import { api } from "./services/api";
 
 export interface ToastItem {
@@ -23,6 +24,7 @@ export function App() {
   const [leadsCount, setLeadsCount] = useState(0);
   const [euCount, setEuCount] = useState(0);
   const [templatesCount, setTemplatesCount] = useState(0);
+  const [automationsUpcomingCount, setAutomationsUpcomingCount] = useState(0);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [showSmtpModal, setShowSmtpModal] = useState(false);
 
@@ -58,6 +60,13 @@ export function App() {
       const tpls = await api.getTemplates();
       if (tpls?.data) setTemplatesCount(tpls.data.length);
     } catch (e) {}
+
+    try {
+      const autoData = await api.getAutomationsOverview();
+      if (autoData?.counts?.total_upcoming !== undefined) {
+        setAutomationsUpcomingCount(autoData.counts.total_upcoming);
+      }
+    } catch (e) {}
   };
 
   // Load global stats once on mount only
@@ -82,6 +91,7 @@ export function App() {
         leadsCount={leadsCount}
         euCount={euCount}
         templatesCount={templatesCount}
+        automationsUpcomingCount={automationsUpcomingCount}
         isRunning={isPipelineRunning}
       />
 
@@ -112,6 +122,13 @@ export function App() {
             onUpdateBadge={(cnt: number) => setTemplatesCount(cnt)}
             showSmtpModalDirect={showSmtpModal}
             onCloseSmtpModalDirect={() => setShowSmtpModal(false)}
+          />
+        )}
+
+        {activeTab === "automations" && (
+          <AutomationHub
+            onToast={showToast}
+            onUpdateBadge={(cnt: number) => setAutomationsUpcomingCount(cnt)}
           />
         )}
       </main>

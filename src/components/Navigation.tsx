@@ -1,5 +1,5 @@
 import React from "react";
-import { PlayCircle, Database, Bot, Building2, Mail } from "lucide-react";
+import { PlayCircle, Database, Bot, Building2, Mail, Zap } from "lucide-react";
 
 export interface NavigationProps {
   activeTab: string;
@@ -7,6 +7,7 @@ export interface NavigationProps {
   leadsCount?: number;
   euCount?: number;
   templatesCount?: number;
+  automationsUpcomingCount?: number;
   isRunning?: boolean;
 }
 
@@ -16,6 +17,7 @@ export function Navigation({
   leadsCount,
   euCount,
   templatesCount,
+  automationsUpcomingCount,
   isRunning,
 }: NavigationProps) {
   const tabs = [
@@ -54,6 +56,13 @@ export function Navigation({
       badge: templatesCount !== undefined ? templatesCount : null,
       badgeType: null,
       badgeGradient: true,
+    },
+    {
+      id: "automations",
+      label: "Automation Hub",
+      icon: Zap,
+      badge: automationsUpcomingCount !== undefined && automationsUpcomingCount > 0 ? automationsUpcomingCount : null,
+      badgeType: null,
     },
   ];
 
