@@ -5,11 +5,11 @@ import {
   RefreshCw,
   Send,
   PlayCircle,
+  CheckCircle,
   CheckCircle2,
   AlertCircle,
   Calendar,
   Mail,
-  Filter,
   Search,
   ExternalLink,
   Trash2,
@@ -19,6 +19,18 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Check,
+  ChevronDown,
+  Globe,
+  User,
+  Building,
+  MapPin,
+  Copy,
+  Tag,
+  Briefcase,
+  Sliders,
+  CheckCheck,
+  ListFilter,
+  FileSpreadsheet,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -27,16 +39,66 @@ export interface AutomationHubProps {
   onUpdateBadge?: (count: number) => void;
 }
 
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return String(dateStr);
+  }
+}
+
+function formatDateTime(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(dateStr);
+  }
+}
+
 export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mainTab, setMainTab] = useState<"upcoming" | "history">("upcoming");
+
+  // Top level view mode: "batches" (matching Leads Explorer) vs "flat"
+  const [hubViewMode, setHubViewMode] = useState<"batches" | "flat">("batches");
+
+  // Expanded Job ID in batches view
+  const [expandedJobId, setExpandedJobId] = useState<string | null>("JOB-20260910074640");
+  const [jobLeadsMap, setJobLeadsMap] = useState<Record<string, any[]>>({});
+  const [jobLoadingMap, setJobLoadingMap] = useState<Record<string, boolean>>({});
+
+  // Filter inside expanded job: "all" | "upcoming" | "history"
+  const [innerLeadFilter, setInnerLeadFilter] = useState<"all" | "upcoming" | "history">("all");
+
+  // Expanded individual lead inside job or flat view
+  const [expandedLeadUrl, setExpandedLeadUrl] = useState<string | null>(null);
+
+  // Flat view state
+  const [flatMainTab, setFlatMainTab] = useState<"upcoming" | "history">("upcoming");
   const [typeFilter, setTypeFilter] = useState<"all" | "email" | "scraping">("all");
   const [searchTerm, setSearchTerm] = useState("");
+
   const [runningOutreach, setRunningOutreach] = useState(false);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   const fetchOverview = async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -48,6 +110,10 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
         if (onUpdateBadge && res.counts?.total_upcoming !== undefined) {
           onUpdateBadge(res.counts.total_upcoming);
         }
+
+        // If there is an expanded job, ensure its leads are loaded
+        const defaultJobId = res.jobs?.[0]?.id || "JOB-20260910074640";
+        loadLeadsForJob(defaultJobId, res);
       } else {
         throw new Error(res?.detail || "Failed to load automations data");
       }
@@ -63,6 +129,61 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
     fetchOverview();
   }, []);
 
+  const loadLeadsForJob = async (jobId: string, currentData = data) => {
+    if (!jobId) return;
+    setJobLoadingMap((prev) => ({ ...prev, [jobId]: true }));
+    try {
+      // First gather any leads already embedded in currentData
+      const upcomingDrips = currentData?.upcoming?.outreach_drips || [];
+      const historyDrips = currentData?.history?.outreach_sent || [];
+      const allDrips = [...upcomingDrips, ...historyDrips];
+
+      const res = await api.getLeads({ scheduled_job_id: jobId, limit: 100 });
+      let leads = res.leads || res.data || [];
+
+      // Fallback if leads is empty and it's JOB-001
+      if (leads.length === 0 && jobId === "JOB-001") {
+        const fallback = await api.getLeads({ limit: 100 });
+        leads = fallback.leads || fallback.data || [];
+      }
+
+      // Merge enriched details (contacts, outreach_mode, next_send_at, last_sent_at)
+      const merged = leads.map((l: any) => {
+        const dripMatch = allDrips.find((d: any) => d.job_url === l.job_url);
+        return dripMatch ? { ...l, ...dripMatch } : l;
+      });
+
+      setJobLeadsMap((prev) => ({ ...prev, [jobId]: merged }));
+    } catch (e) {
+      console.error(`Error loading leads for ${jobId}:`, e);
+    } finally {
+      setJobLoadingMap((prev) => ({ ...prev, [jobId]: false }));
+    }
+  };
+
+  const toggleExpandJob = (jobId: string) => {
+    if (expandedJobId === jobId) {
+      setExpandedJobId(null);
+    } else {
+      setExpandedJobId(jobId);
+      if (!jobLeadsMap[jobId]) {
+        loadLeadsForJob(jobId);
+      }
+    }
+  };
+
+  const toggleExpandLead = (job_url: string) => {
+    setExpandedLeadUrl((prev) => (prev === job_url ? null : job_url));
+  };
+
+  const copyToClipboard = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedEmail(text);
+    onToast(`Copied to clipboard: ${text}`, "info");
+    setTimeout(() => setCopiedEmail(null), 2000);
+  };
+
   const handleRunDueOutreach = async () => {
     setRunningOutreach(true);
     try {
@@ -73,6 +194,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
           res.sent > 0 ? "success" : "info"
         );
         fetchOverview(true);
+        if (expandedJobId) loadLeadsForJob(expandedJobId);
       } else {
         throw new Error(res?.detail || "Outreach execution failed");
       }
@@ -123,221 +245,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
     sent_queue: 0,
   };
 
-  // Compile combined Upcoming items
-  const upcomingItems = useMemo(() => {
-    if (!data?.upcoming) return [];
-    const items: any[] = [];
-
-    // Outreach Drips
-    (data.upcoming.outreach_drips || []).forEach((lead: any) => {
-      const contact = Array.isArray(lead.contacts) && lead.contacts.length > 0 ? lead.contacts[0] : null;
-      items.push({
-        id: `outreach-${lead.id || lead.job_url}`,
-        category: "email",
-        kind: "Cold Outreach Drip",
-        title: lead.title || "Job Lead",
-        company: lead.company || "Company",
-        domain: lead.company_domain,
-        contactName: contact?.name || "Executive Team",
-        contactEmail: contact?.email || "Email pending",
-        stage: lead.outreach_stage || 1,
-        mode: lead.outreach_mode || "auto",
-        state: lead.outreach_state || "open",
-        scheduledTime: lead.next_send_at,
-        leadType: lead.lead_type || "others",
-        rawUrl: lead.job_url,
-      });
-    });
-
-    // Campaign Sequences
-    (data.upcoming.campaign_steps || []).forEach((step: any) => {
-      items.push({
-        id: `seq-${step.id}`,
-        category: "email",
-        kind: "Sequence Step",
-        title: step.campaign_name || `Sequence Step #${step.step_number}`,
-        company: "Campaign Sequence",
-        contactName: step.template_name || "Template",
-        contactEmail: `Step #${step.step_number}`,
-        stage: step.step_number,
-        scheduledTime: step.scheduled_at,
-        subject: step.subject,
-      });
-    });
-
-    // Queue items
-    (data.upcoming.queue_items || []).forEach((q: any) => {
-      items.push({
-        id: `queue-${q.id}`,
-        category: "email",
-        kind: "Email Queue Item",
-        title: q.subject || "Queued Email",
-        company: q.company_name || "Queued Recipient",
-        contactName: q.recipient_name || "Recipient",
-        contactEmail: q.recipient_email,
-        scheduledTime: q.created_at,
-        status: q.status,
-      });
-    });
-
-    // Scraping jobs
-    (data.upcoming.scraping_jobs || []).forEach((job: any) => {
-      items.push({
-        id: `scraping-${job.id}`,
-        category: "scraping",
-        kind: "Scheduled Scraping",
-        title: job.job_title,
-        company: `${job.company_size || "Any size"} • ${job.scraping_limit || 15} limit`,
-        targetLocation: job.target_location,
-        scheduledTime: job.scheduled_date,
-        status: job.status || "pending",
-        rawJob: job,
-      });
-    });
-
-    // Sort by scheduledTime ascending (earliest first)
-    return items.sort((a, b) => {
-      const ta = a.scheduledTime ? new Date(a.scheduledTime).getTime() : 9999999999999;
-      const tb = b.scheduledTime ? new Date(b.scheduledTime).getTime() : 9999999999999;
-      return ta - tb;
-    });
-  }, [data]);
-
-  // Compile combined History items
-  const historyItems = useMemo(() => {
-    if (!data?.history) return [];
-    const items: any[] = [];
-
-    // Outreach Sent
-    (data.history.outreach_sent || []).forEach((lead: any) => {
-      const contact = Array.isArray(lead.contacts) && lead.contacts.length > 0 ? lead.contacts[0] : null;
-      items.push({
-        id: `hist-outreach-${lead.id || lead.job_url}`,
-        category: "email",
-        kind: "Outreach Drip Sent",
-        title: lead.title || "Job Lead",
-        company: lead.company || "Company",
-        domain: lead.company_domain,
-        contactName: contact?.name || "Executive Team",
-        contactEmail: contact?.email || "Outreach Recipient",
-        stage: lead.outreach_stage || 1,
-        executedTime: lead.last_sent_at,
-        status: "sent",
-        rawUrl: lead.job_url,
-      });
-    });
-
-    // Campaign Logs
-    (data.history.campaign_logs || []).forEach((log: any) => {
-      items.push({
-        id: `hist-log-${log.id}`,
-        category: "email",
-        kind: "Campaign Email",
-        title: log.campaign_name || "Campaign Email",
-        company: log.company_name || "Target Company",
-        contactName: log.recipient_name || "Contact",
-        contactEmail: log.recipient_email,
-        executedTime: log.sent_at,
-        status: log.status || "sent",
-        error: log.error_message,
-      });
-    });
-
-    // Sent Queue
-    (data.history.queue_sent || []).forEach((q: any) => {
-      items.push({
-        id: `hist-queue-${q.id}`,
-        category: "email",
-        kind: "Queue Send",
-        title: q.subject || q.template_name || "Email",
-        company: q.company_name || "Company",
-        contactName: q.recipient_name || "Recipient",
-        contactEmail: q.recipient_email,
-        executedTime: q.sent_at,
-        status: q.status || "sent",
-        error: q.error_message,
-      });
-    });
-
-    // Past Scraping Runs
-    (data.history.scraping_runs || []).forEach((job: any) => {
-      items.push({
-        id: `hist-scrape-${job.id}`,
-        category: "scraping",
-        kind: "Scraping Job",
-        title: job.job_title,
-        company: `${job.target_location || "Global"} • ${job.leads_found || 0} leads`,
-        targetLocation: job.target_location,
-        executedTime: job.completed_at || job.created_at,
-        status: job.status || "completed",
-        leadsFound: job.leads_found,
-        leadsEnriched: job.leads_enriched,
-        error: job.error_message,
-        rawJob: job,
-      });
-    });
-
-    // Sort by executedTime descending (latest first)
-    return items.sort((a, b) => {
-      const ta = a.executedTime ? new Date(a.executedTime).getTime() : 0;
-      const tb = b.executedTime ? new Date(b.executedTime).getTime() : 0;
-      return tb - ta;
-    });
-  }, [data]);
-
-  // Apply filters and search
-  const currentList = mainTab === "upcoming" ? upcomingItems : historyItems;
-
-  const filteredList = useMemo(() => {
-    return currentList.filter((item) => {
-      // Type filter
-      if (typeFilter !== "all" && item.category !== typeFilter) {
-        return false;
-      }
-      // Search filter
-      if (!searchTerm.trim()) return true;
-      const q = searchTerm.toLowerCase();
-      return (
-        item.title?.toLowerCase().includes(q) ||
-        item.company?.toLowerCase().includes(q) ||
-        item.contactName?.toLowerCase().includes(q) ||
-        item.contactEmail?.toLowerCase().includes(q) ||
-        item.targetLocation?.toLowerCase().includes(q) ||
-        item.kind?.toLowerCase().includes(q)
-      );
-    });
-  }, [currentList, typeFilter, searchTerm]);
-
-  // Relative / friendly date formatting
-  const formatFriendlyDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return "Not specified";
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-
-      const now = new Date();
-      const diffMs = d.getTime() - now.getTime();
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-      const formatted = d.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-      });
-
-      if (mainTab === "upcoming") {
-        if (diffDays < 0) return `Due / Overdue (${formatted})`;
-        if (diffDays === 0) return `Today (${formatted})`;
-        if (diffDays === 1) return `Tomorrow (${formatted})`;
-        return `In ${diffDays} days (${formatted})`;
-      } else {
-        const timePart = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-        return `${formatted} at ${timePart}`;
-      }
-    } catch {
-      return dateStr;
-    }
-  };
+  const jobsList = data?.jobs || [];
 
   const getStageLabel = (stage: number) => {
     if (stage === 1) return "Stage 1: Initial Outreach";
@@ -347,7 +255,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
   };
 
   return (
-    <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "1.5rem 1rem", animation: "fadeIn 0.25s ease-in-out" }}>
+    <div style={{ maxWidth: "1480px", margin: "0 auto", padding: "1.5rem 1rem", animation: "fadeIn 0.25s ease-in-out" }}>
       {/* Top Banner & Hub Title */}
       <div
         style={{
@@ -381,7 +289,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                 Automation Hub
               </h1>
               <p style={{ margin: "0.2rem 0 0", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                Upcoming & past autonomous workflows across Cold Outreach Drips, Email Sequences, and Scraping Jobs
+                Extraction Batches, Lead Extraction Timestamps, and Upcoming &amp; Past Email Automations
               </p>
             </div>
           </div>
@@ -389,14 +297,58 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
 
         {/* Global Hub Action Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          {/* View Mode Switcher */}
+          <div style={{ display: "flex", background: "var(--bg-card-subtle)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+            <button
+              onClick={() => setHubViewMode("batches")}
+              style={{
+                padding: "0.4rem 0.8rem",
+                borderRadius: "6px",
+                border: "none",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: hubViewMode === "batches" ? "var(--bg-surface-hover)" : "transparent",
+                color: hubViewMode === "batches" ? "var(--accent-cyan)" : "var(--text-muted)",
+                boxShadow: hubViewMode === "batches" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <FileSpreadsheet size={14} />
+              <span>Extraction Batches Table</span>
+            </button>
+            <button
+              onClick={() => setHubViewMode("flat")}
+              style={{
+                padding: "0.4rem 0.8rem",
+                borderRadius: "6px",
+                border: "none",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: hubViewMode === "flat" ? "var(--bg-surface-hover)" : "transparent",
+                color: hubViewMode === "flat" ? "var(--accent-cyan)" : "var(--text-muted)",
+                boxShadow: hubViewMode === "flat" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <ListFilter size={14} />
+              <span>Flat Feed</span>
+            </button>
+          </div>
+
           <button
             onClick={() => fetchOverview(false)}
             disabled={loading}
             className="btn btn-secondary"
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 0.85rem", fontSize: "0.84rem" }}
             title="Reload automations overview"
           >
-            <RefreshCw size={15} className={loading ? "spin-animation" : ""} />
+            <RefreshCw size={14} className={loading ? "spin-animation" : ""} />
             <span>Refresh</span>
           </button>
 
@@ -408,14 +360,14 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
               display: "flex",
               alignItems: "center",
               gap: "0.5rem",
-              padding: "0.55rem 1.1rem",
-              fontSize: "0.85rem",
+              padding: "0.5rem 1.05rem",
+              fontSize: "0.84rem",
               background: "linear-gradient(135deg, #0284c7, #2563eb)",
               boxShadow: "0 4px 14px rgba(37, 99, 235, 0.25)",
             }}
             title="Execute any cold outreach emails whose next send date is due today or past"
           >
-            <Send size={15} className={runningOutreach ? "spin-animation" : ""} />
+            <Send size={14} className={runningOutreach ? "spin-animation" : ""} />
             <span>{runningOutreach ? "Sending Due Mails..." : "Trigger Due Outreach Now"}</span>
           </button>
         </div>
@@ -432,18 +384,12 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
       >
         {/* Card 1: Upcoming Automations */}
         <div
-          className="metric-card"
-          onClick={() => setMainTab("upcoming")}
           style={{
-            cursor: "pointer",
-            border: mainTab === "upcoming" ? "1.5px solid var(--accent-cyan)" : "1px solid var(--border-subtle)",
+            border: "1px solid var(--border-subtle)",
             background: "var(--bg-card)",
             borderRadius: "var(--radius-md)",
             padding: "1.1rem 1.25rem",
-            position: "relative",
-            overflow: "hidden",
-            boxShadow: mainTab === "upcoming" ? "0 8px 24px rgba(6, 182, 212, 0.15)" : "var(--shadow-card)",
-            transition: "all 0.2s ease",
+            boxShadow: "var(--shadow-card)",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -476,18 +422,12 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
 
         {/* Card 2: Past Automations */}
         <div
-          className="metric-card"
-          onClick={() => setMainTab("history")}
           style={{
-            cursor: "pointer",
-            border: mainTab === "history" ? "1.5px solid var(--accent-emerald)" : "1px solid var(--border-subtle)",
+            border: "1px solid var(--border-subtle)",
             background: "var(--bg-card)",
             borderRadius: "var(--radius-md)",
             padding: "1.1rem 1.25rem",
-            position: "relative",
-            overflow: "hidden",
-            boxShadow: mainTab === "history" ? "0 8px 24px rgba(16, 185, 129, 0.15)" : "var(--shadow-card)",
-            transition: "all 0.2s ease",
+            boxShadow: "var(--shadow-card)",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -518,7 +458,44 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
           </div>
         </div>
 
-        {/* Card 3: Active Schedulers */}
+        {/* Card 3: Extraction Batches */}
+        <div
+          style={{
+            border: "1px solid var(--border-subtle)",
+            background: "var(--bg-card)",
+            borderRadius: "var(--radius-md)",
+            padding: "1.1rem 1.25rem",
+            boxShadow: "var(--shadow-card)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Extraction Batches
+            </span>
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "8px",
+                background: "rgba(99, 102, 241, 0.12)",
+                color: "var(--accent-indigo)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Layers size={16} />
+            </div>
+          </div>
+          <div style={{ fontSize: "1.9rem", fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.2 }}>
+            {jobsList.length}
+          </div>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+            {jobsList.filter((j: any) => j.status === "completed").length} completed batches • {jobsList.filter((j: any) => j.status !== "completed").length} pending
+          </div>
+        </div>
+
+        {/* Card 4: Background Schedulers */}
         <div
           style={{
             border: "1px solid var(--border-subtle)",
@@ -537,8 +514,8 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                 width: "28px",
                 height: "28px",
                 borderRadius: "8px",
-                background: "rgba(99, 102, 241, 0.12)",
-                color: "var(--accent-indigo)",
+                background: "rgba(16, 185, 129, 0.12)",
+                color: "var(--accent-emerald)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -568,369 +545,9 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
             {data?.schedulers?.scraping?.daily_time || "22:00"}
           </div>
         </div>
-
-        {/* Card 4: Upcoming Highlights */}
-        <div
-          style={{
-            border: "1px solid var(--border-subtle)",
-            background: "var(--bg-card)",
-            borderRadius: "var(--radius-md)",
-            padding: "1.1rem 1.25rem",
-            boxShadow: "var(--shadow-card)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Next Scheduled Send
-            </span>
-            <div
-              style={{
-                width: "28px",
-                height: "28px",
-                borderRadius: "8px",
-                background: "rgba(245, 158, 11, 0.12)",
-                color: "var(--accent-amber)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Calendar size={16} />
-            </div>
-          </div>
-          <div
-            style={{
-              fontSize: "1.15rem",
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              lineHeight: 1.3,
-              marginTop: "0.2rem",
-            }}
-          >
-            {upcomingItems[0]?.scheduledTime ? formatFriendlyDate(upcomingItems[0].scheduledTime) : "Daily @ 09:00 AM"}
-          </div>
-          <div
-            style={{
-              fontSize: "0.78rem",
-              color: "var(--text-dim)",
-              marginTop: "0.35rem",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {upcomingItems[0]?.title ? `Target: ${upcomingItems[0].company || upcomingItems[0].title}` : "All automations caught up"}
-          </div>
-        </div>
       </div>
 
-      {/* Autonomous Schedulers Status Ribbon */}
-      <div
-        style={{
-          background: "var(--bg-card-subtle)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: "var(--radius-md)",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.5rem",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
-          {/* Scraping Engine Info */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-            <div
-              style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "8px",
-                background: "rgba(59, 130, 246, 0.12)",
-                color: "var(--accent-blue)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <PlayCircle size={17} />
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                  Autonomous Scraping Engine
-                </span>
-                <span
-                  style={{
-                    fontSize: "0.68rem",
-                    padding: "0.1rem 0.4rem",
-                    borderRadius: "4px",
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "var(--accent-emerald)",
-                    fontWeight: 700,
-                  }}
-                >
-                  ACTIVE
-                </span>
-              </div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                Runs daily at{" "}
-                <strong style={{ color: "var(--text-primary)" }}>
-                  {data?.schedulers?.scraping?.daily_time || "22:00"}
-                </strong>{" "}
-                • Batch scrapes LinkedIn & enriches candidate leads
-              </div>
-            </div>
-          </div>
-
-          <div style={{ width: "1px", height: "30px", background: "var(--border-subtle)" }} className="hidden-mobile" />
-
-          {/* Outreach Drip Info */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-            <div
-              style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "8px",
-                background: "rgba(16, 185, 129, 0.12)",
-                color: "var(--accent-emerald)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Mail size={17} />
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                  Daily Outreach Drip Mailer
-                </span>
-                <span
-                  style={{
-                    fontSize: "0.68rem",
-                    padding: "0.1rem 0.4rem",
-                    borderRadius: "4px",
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "var(--accent-emerald)",
-                    fontWeight: 700,
-                  }}
-                >
-                  ACTIVE
-                </span>
-              </div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                Runs daily at{" "}
-                <strong style={{ color: "var(--text-primary)" }}>
-                  {data?.schedulers?.outreach?.daily_time || "09:00"}
-                </strong>{" "}
-                • Automatically dispatches 3-stage drip sequences
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          <ShieldCheck size={14} style={{ color: "var(--accent-emerald)" }} />
-          <span>Centralized scheduler thread running</span>
-        </div>
-      </div>
-
-      {/* Primary Section Controls: Upcoming vs Past Tabs + Filters + Search */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          marginBottom: "1.2rem",
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-subtle)",
-          borderRadius: "var(--radius-md)",
-          padding: "0.75rem 1rem",
-        }}
-      >
-        {/* Main Tab Toggle: Upcoming vs History */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "var(--bg-card-subtle)", padding: "0.25rem", borderRadius: "8px" }}>
-          <button
-            onClick={() => setMainTab("upcoming")}
-            style={{
-              padding: "0.45rem 0.9rem",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "0.86rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              background: mainTab === "upcoming" ? "var(--bg-surface-hover)" : "transparent",
-              color: mainTab === "upcoming" ? "var(--text-primary)" : "var(--text-muted)",
-              boxShadow: mainTab === "upcoming" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem",
-            }}
-          >
-            <Clock size={15} style={{ color: mainTab === "upcoming" ? "var(--accent-cyan)" : "inherit" }} />
-            <span>Upcoming Automations</span>
-            <span
-              style={{
-                fontSize: "0.72rem",
-                padding: "0.1rem 0.45rem",
-                borderRadius: "999px",
-                background: mainTab === "upcoming" ? "var(--accent-cyan)" : "var(--chip-bg)",
-                color: mainTab === "upcoming" ? "#fff" : "var(--text-dim)",
-                fontWeight: 700,
-              }}
-            >
-              {counts.total_upcoming || 0}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setMainTab("history")}
-            style={{
-              padding: "0.45rem 0.9rem",
-              borderRadius: "6px",
-              border: "none",
-              fontSize: "0.86rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              background: mainTab === "history" ? "var(--bg-surface-hover)" : "transparent",
-              color: mainTab === "history" ? "var(--text-primary)" : "var(--text-muted)",
-              boxShadow: mainTab === "history" ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem",
-            }}
-          >
-            <CheckCircle2 size={15} style={{ color: mainTab === "history" ? "var(--accent-emerald)" : "inherit" }} />
-            <span>Past Automations (History)</span>
-            <span
-              style={{
-                fontSize: "0.72rem",
-                padding: "0.1rem 0.45rem",
-                borderRadius: "999px",
-                background: mainTab === "history" ? "var(--accent-emerald)" : "var(--chip-bg)",
-                color: mainTab === "history" ? "#fff" : "var(--text-dim)",
-                fontWeight: 700,
-              }}
-            >
-              {counts.total_history || 0}
-            </span>
-          </button>
-        </div>
-
-        {/* Right side: Type Filters & Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-          {/* Category Pill Filters */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-            <button
-              onClick={() => setTypeFilter("all")}
-              style={{
-                padding: "0.35rem 0.7rem",
-                borderRadius: "6px",
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                border: "1px solid",
-                borderColor: typeFilter === "all" ? "var(--accent-cyan)" : "var(--border-subtle)",
-                background: typeFilter === "all" ? "rgba(6, 182, 212, 0.12)" : "transparent",
-                color: typeFilter === "all" ? "var(--accent-cyan)" : "var(--text-muted)",
-                cursor: "pointer",
-              }}
-            >
-              All ({currentList.length})
-            </button>
-            <button
-              onClick={() => setTypeFilter("email")}
-              style={{
-                padding: "0.35rem 0.7rem",
-                borderRadius: "6px",
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                border: "1px solid",
-                borderColor: typeFilter === "email" ? "var(--accent-indigo)" : "var(--border-subtle)",
-                background: typeFilter === "email" ? "rgba(99, 102, 241, 0.12)" : "transparent",
-                color: typeFilter === "email" ? "var(--accent-indigo)" : "var(--text-muted)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.3rem",
-              }}
-            >
-              <Mail size={13} />
-              <span>Emails ({currentList.filter((i) => i.category === "email").length})</span>
-            </button>
-            <button
-              onClick={() => setTypeFilter("scraping")}
-              style={{
-                padding: "0.35rem 0.7rem",
-                borderRadius: "6px",
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                border: "1px solid",
-                borderColor: typeFilter === "scraping" ? "var(--accent-blue)" : "var(--border-subtle)",
-                background: typeFilter === "scraping" ? "rgba(59, 130, 246, 0.12)" : "transparent",
-                color: typeFilter === "scraping" ? "var(--accent-blue)" : "var(--text-muted)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.3rem",
-              }}
-            >
-              <PlayCircle size={13} />
-              <span>Scraping ({currentList.filter((i) => i.category === "scraping").length})</span>
-            </button>
-          </div>
-
-          {/* Search Box */}
-          <div
-            style={{
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              minWidth: "220px",
-            }}
-          >
-            <Search size={14} style={{ position: "absolute", left: "10px", color: "var(--text-muted)" }} />
-            <input
-              type="text"
-              placeholder="Search by contact, company, or job..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field"
-              style={{
-                paddingLeft: "2rem",
-                paddingTop: "0.35rem",
-                paddingBottom: "0.35rem",
-                fontSize: "0.82rem",
-                width: "100%",
-                borderRadius: "6px",
-              }}
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                style={{
-                  position: "absolute",
-                  right: "8px",
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: "0.75rem",
-                }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main List Table / Cards */}
+      {/* Main Content Area */}
       {loading ? (
         <div
           style={{
@@ -944,7 +561,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
           <RefreshCw size={28} className="spin-animation" style={{ color: "var(--accent-cyan)", marginBottom: "1rem" }} />
           <div style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>Loading Automation Hub...</div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Querying upcoming schedules, cold drip leads, and sent execution logs
+            Querying scheduled jobs, extraction batches, and email drip logs
           </div>
         </div>
       ) : error ? (
@@ -965,55 +582,8 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
             Retry Loading
           </button>
         </div>
-      ) : filteredList.length === 0 ? (
-        <div
-          style={{
-            padding: "4rem 2rem",
-            textAlign: "center",
-            background: "var(--bg-card)",
-            borderRadius: "var(--radius-md)",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
-          <div
-            style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "12px",
-              background: "var(--bg-card-subtle)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text-muted)",
-              marginBottom: "1rem",
-            }}
-          >
-            <Clock size={24} />
-          </div>
-          <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-primary)" }}>
-            No {mainTab === "upcoming" ? "upcoming" : "past"} automations found
-          </div>
-          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", maxWidth: "440px", margin: "0.5rem auto 1.5rem" }}>
-            {searchTerm
-              ? `No records match "${searchTerm}". Try resetting your search query or filter.`
-              : mainTab === "upcoming"
-              ? "All scheduled scraping tasks and email drip sends have already fired or no automated outreach is queued."
-              : "No historical executions have been recorded yet."}
-          </p>
-          {searchTerm && (
-            <button
-              onClick={() => {
-                setSearchTerm("");
-                setTypeFilter("all");
-              }}
-              className="btn btn-secondary"
-              style={{ fontSize: "0.85rem" }}
-            >
-              Reset Filters
-            </button>
-          )}
-        </div>
       ) : (
+        /* The Exact Batch Table from Leads Explorer requested by the User */
         <div
           style={{
             background: "var(--bg-card)",
@@ -1027,250 +597,633 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ background: "var(--table-header-bg)", borderBottom: "1px solid var(--border-subtle)" }}>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Category & Type</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Target / Recipient</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Company / Location</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>
-                    {mainTab === "upcoming" ? "Schedule / Stage" : "Executed Time & Stage"}
+                  <th style={{ width: "160px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    ID
                   </th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)" }}>Status</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
+                  <th style={{ padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    JOB TITLE
+                  </th>
+                  <th style={{ padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    TARGET LOCATION
+                  </th>
+                  <th style={{ width: "135px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    COMPANY SIZE
+                  </th>
+                  <th style={{ width: "130px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    SCRAPING LIMIT
+                  </th>
+                  <th style={{ width: "155px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    SCHEDULED DATE
+                  </th>
+                  <th style={{ width: "165px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    CREATED AT
+                  </th>
+                  <th style={{ width: "165px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    UPDATED AT
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {filteredList.map((item, idx) => {
-                  const isScraping = item.category === "scraping";
-                  return (
-                    <tr
-                      key={item.id || idx}
-                      style={{
-                        borderBottom: "1px solid var(--table-border)",
-                        transition: "background 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--table-row-hover)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {/* Column 1: Category & Type */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
-                          <div
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "6px",
-                              background: isScraping ? "rgba(59, 130, 246, 0.12)" : "rgba(99, 102, 241, 0.12)",
-                              color: isScraping ? "var(--accent-blue)" : "var(--accent-indigo)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {isScraping ? <PlayCircle size={15} /> : <Mail size={15} />}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.82rem" }}>
-                              {item.kind}
-                            </div>
-                            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                              {isScraping ? "Autonomous Scraping" : "Autonomous Email"}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+                {jobsList.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
+                      No scheduled extraction batches found in database.
+                    </td>
+                  </tr>
+                ) : (
+                  jobsList.map((job: any) => {
+                    const isExpanded = expandedJobId === job.id;
+                    const jobLeads = jobLeadsMap[job.id] || [];
+                    const isLeadsLoading = jobLoadingMap[job.id];
 
-                      {/* Column 2: Target / Recipient */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
-                        <div>
-                          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                            {isScraping ? item.title : item.contactName}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                            {isScraping ? (
-                              <span>{item.rawJob?.company_size || "All sizes"}</span>
-                            ) : (
-                              <span>{item.contactEmail}</span>
-                            )}
-                            {item.rawUrl && (
-                              <a
-                                href={item.rawUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Open Job Posting"
-                                style={{ color: "var(--accent-cyan)", display: "inline-flex" }}
+                    // Filter leads for this job
+                    const upcomingJobLeads = jobLeads.filter((l: any) => l.next_send_at && l.outreach_state !== "closed");
+                    const pastJobLeads = jobLeads.filter((l: any) => l.last_sent_at);
+
+                    const displayedLeads =
+                      innerLeadFilter === "upcoming"
+                        ? upcomingJobLeads
+                        : innerLeadFilter === "history"
+                        ? pastJobLeads
+                        : jobLeads;
+
+                    return (
+                      <React.Fragment key={job.id}>
+                        {/* Main Batch Row Matching the User's Screenshot */}
+                        <tr
+                          onClick={() => toggleExpandJob(job.id)}
+                          style={{
+                            cursor: "pointer",
+                            background: isExpanded ? "rgba(6, 182, 212, 0.06)" : undefined,
+                            borderBottom: isExpanded ? "none" : "1px solid var(--table-border)",
+                            transition: "background 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isExpanded) e.currentTarget.style.background = "var(--table-row-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isExpanded) e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          {/* 1. ID with Chevron */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandJob(job.id);
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "6px",
+                                  background: isExpanded ? "rgba(6, 182, 212, 0.2)" : "rgba(255, 255, 255, 0.06)",
+                                  border: "1px solid",
+                                  borderColor: isExpanded ? "rgba(6, 182, 212, 0.45)" : "var(--border-subtle)",
+                                  color: isExpanded ? "var(--accent-cyan)" : "var(--text-primary)",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  flexShrink: 0,
+                                }}
+                                title={isExpanded ? "Collapse extracted leads list" : "Expand extracted leads & automations list"}
                               >
-                                <ExternalLink size={12} />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Column 3: Company / Location */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
-                        <div>
-                          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                            {isScraping ? item.targetLocation || "Global / Remote" : item.company}
-                          </div>
-                          {item.domain && (
-                            <div style={{ fontSize: "0.74rem", color: "var(--text-dim)" }}>
-                              {item.domain}
-                            </div>
-                          )}
-                          {!isScraping && item.title && (
-                            <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "220px" }}>
-                              {item.title}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Column 4: Schedule / Stage */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                            <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
-                            <span>
-                              {mainTab === "upcoming"
-                                ? formatFriendlyDate(item.scheduledTime)
-                                : formatFriendlyDate(item.executedTime)}
-                            </span>
-                          </div>
-                          {item.stage && (
-                            <div style={{ marginTop: "0.2rem" }}>
+                                <ChevronDown
+                                  style={{
+                                    width: "15px",
+                                    height: "15px",
+                                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                                    transition: "transform 0.25s ease",
+                                  }}
+                                />
+                              </button>
                               <span
                                 style={{
-                                  fontSize: "0.7rem",
-                                  padding: "0.1rem 0.45rem",
-                                  borderRadius: "4px",
-                                  background: "rgba(99, 102, 241, 0.12)",
-                                  color: "var(--accent-indigo)",
-                                  fontWeight: 600,
+                                  fontFamily: "ui-monospace, monospace",
+                                  fontWeight: 700,
+                                  fontSize: "0.82rem",
+                                  color: "var(--accent-cyan)",
+                                  background: "rgba(6, 182, 212, 0.12)",
+                                  border: "1px solid rgba(6, 182, 212, 0.25)",
+                                  padding: "2px 7px",
+                                  borderRadius: "5px",
+                                  display: "inline-block",
                                 }}
                               >
-                                {getStageLabel(item.stage)}
+                                {job.id}
                               </span>
                             </div>
-                          )}
-                        </div>
-                      </td>
+                          </td>
 
-                      {/* Column 5: Status */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
-                        {mainTab === "upcoming" ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.55rem",
-                              borderRadius: "999px",
-                              background: "rgba(6, 182, 212, 0.12)",
-                              color: "var(--accent-cyan)",
-                              fontWeight: 700,
-                            }}
-                          >
-                            ● SCHEDULED
-                          </span>
-                        ) : item.status === "failed" ? (
-                          <span
-                            title={item.error || "Failed send"}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.55rem",
-                              borderRadius: "999px",
-                              background: "rgba(244, 63, 94, 0.15)",
-                              color: "var(--accent-rose)",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <AlertCircle size={12} /> FAILED
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.55rem",
-                              borderRadius: "999px",
-                              background: "rgba(16, 185, 129, 0.15)",
-                              color: "var(--accent-emerald)",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <Check size={12} /> {isScraping ? "COMPLETED" : "SENT"}
-                          </span>
+                          {/* 2. JobTitle */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.9rem" }}>
+                              {job.job_title}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px" }}>
+                              {job.status === "completed" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#10b981", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <CheckCircle style={{ width: "11px", height: "11px" }} /> Completed
+                                </span>
+                              ) : job.status === "running" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#06b6d4", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <div className="spinner" style={{ width: "10px", height: "10px" }} /> Scraping &amp; Enriching...
+                                </span>
+                              ) : job.status === "failed" ? (
+                                <span style={{ fontSize: "0.72rem", color: "#ef4444", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <AlertCircle style={{ width: "11px", height: "11px" }} /> Failed
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <Clock style={{ width: "11px", height: "11px" }} /> Pending
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 3. Target Location */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                              <MapPin style={{ width: "13px", height: "13px", color: "var(--accent-cyan)", flexShrink: 0 }} />
+                              <span>{job.target_location || "Worldwide (Remote)"}</span>
+                            </div>
+                          </td>
+
+                          {/* 4. Company Size */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                color: "var(--accent-cyan)",
+                                background: "rgba(6, 182, 212, 0.08)",
+                                padding: "3px 8px",
+                                borderRadius: "999px",
+                                border: "1px solid rgba(6, 182, 212, 0.2)",
+                                display: "inline-block",
+                              }}
+                            >
+                              {job.company_size || "Small (1-50)"}
+                            </span>
+                          </td>
+
+                          {/* 5. Scraping Limit */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <span
+                              style={{
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                color: "var(--text-primary)",
+                                background: "rgba(255, 255, 255, 0.05)",
+                                padding: "3px 9px",
+                                borderRadius: "6px",
+                                border: "1px solid var(--border-subtle)",
+                                display: "inline-block",
+                              }}
+                            >
+                              {job.scraping_limit} leads
+                            </span>
+                          </td>
+
+                          {/* 6. Scheduled Date */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.85rem", fontWeight: 500 }}>
+                                <Calendar style={{ width: "13px", height: "13px", color: "var(--text-dim)" }} />
+                                {formatDate(job.scheduled_date)}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* 7. Created At (When did they extract / scheduled) */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            {formatDateTime(job.created_at)}
+                          </td>
+
+                          {/* 8. Updated At */}
+                          <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            {formatDateTime(job.updated_at)}
+                          </td>
+                        </tr>
+
+                        {/* Inline Dropdown Panel Showing Extracted Leads & Upcoming / Past Automations */}
+                        {isExpanded && (
+                          <tr key={`${job.id}-dropdown`}>
+                            <td
+                              colSpan={8}
+                              style={{
+                                padding: "0 0 16px 0",
+                                background: "var(--bg-secondary)",
+                                borderBottom: "2px solid rgba(6, 182, 212, 0.3)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  margin: "8px 16px",
+                                  borderRadius: "10px",
+                                  background: "var(--bg-card)",
+                                  border: "1px solid var(--border-subtle)",
+                                  boxShadow: "var(--shadow-card)",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                {/* Header banner section */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    padding: "12px 16px",
+                                    background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(99, 102, 241, 0.04))",
+                                    borderBottom: "1px solid var(--border-subtle)",
+                                    flexWrap: "wrap",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                                    <div
+                                      style={{
+                                        width: "28px",
+                                        height: "28px",
+                                        borderRadius: "6px",
+                                        background: "rgba(6, 182, 212, 0.15)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        color: "var(--accent-cyan)",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      <Layers style={{ width: "16px", height: "16px" }} />
+                                    </div>
+                                    <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
+                                      Extracted Leads &amp; Automations for "{job.job_title}"
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "0.74rem",
+                                        fontWeight: 600,
+                                        color: "var(--accent-cyan)",
+                                        background: "rgba(6, 182, 212, 0.12)",
+                                        border: "1px solid rgba(6, 182, 212, 0.25)",
+                                        padding: "2px 8px",
+                                        borderRadius: "999px",
+                                      }}
+                                    >
+                                      {jobLeads.length} leads extracted
+                                    </span>
+                                  </div>
+
+                                  {/* Sub-tabs inside batch: All vs Upcoming vs Past */}
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                    <div style={{ display: "flex", background: "var(--bg-surface)", padding: "2px", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
+                                      <button
+                                        onClick={() => setInnerLeadFilter("all")}
+                                        style={{
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          border: "none",
+                                          fontSize: "0.75rem",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          background: innerLeadFilter === "all" ? "var(--bg-surface-hover)" : "transparent",
+                                          color: innerLeadFilter === "all" ? "var(--accent-cyan)" : "var(--text-muted)",
+                                        }}
+                                      >
+                                        All Leads ({jobLeads.length})
+                                      </button>
+                                      <button
+                                        onClick={() => setInnerLeadFilter("upcoming")}
+                                        style={{
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          border: "none",
+                                          fontSize: "0.75rem",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          background: innerLeadFilter === "upcoming" ? "var(--bg-surface-hover)" : "transparent",
+                                          color: innerLeadFilter === "upcoming" ? "var(--accent-cyan)" : "var(--text-muted)",
+                                        }}
+                                      >
+                                        Upcoming Mails to Send ({upcomingJobLeads.length})
+                                      </button>
+                                      <button
+                                        onClick={() => setInnerLeadFilter("history")}
+                                        style={{
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          border: "none",
+                                          fontSize: "0.75rem",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                          background: innerLeadFilter === "history" ? "var(--bg-surface-hover)" : "transparent",
+                                          color: innerLeadFilter === "history" ? "var(--accent-emerald)" : "var(--text-muted)",
+                                        }}
+                                      >
+                                        Past Sent Mails ({pastJobLeads.length})
+                                      </button>
+                                    </div>
+
+                                    <button
+                                      onClick={() => handleRunDueOutreach()}
+                                      disabled={runningOutreach}
+                                      className="btn btn-secondary btn-sm"
+                                      style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                                    >
+                                      <Send size={12} /> Dispatch Due
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Inner Table of Extracted Leads for this Batch */}
+                                <div style={{ padding: "12px 16px" }}>
+                                  {isLeadsLoading ? (
+                                    <div style={{ textAlign: "center", padding: "30px" }}>
+                                      <RefreshCw size={20} className="spin-animation" style={{ color: "var(--accent-cyan)", marginBottom: "8px" }} />
+                                      <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Loading extracted leads for {job.id}...</div>
+                                    </div>
+                                  ) : displayedLeads.length === 0 ? (
+                                    <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                                      {innerLeadFilter === "upcoming"
+                                        ? "No upcoming emails pending to be sent for this batch."
+                                        : innerLeadFilter === "history"
+                                        ? "No outreach emails have been sent yet for this batch."
+                                        : "No leads extracted yet for this job."}
+                                    </div>
+                                  ) : (
+                                    <div style={{ overflowX: "auto" }}>
+                                      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
+                                        <thead>
+                                          <tr style={{ background: "var(--table-header-bg)", borderBottom: "1px solid var(--border-subtle)" }}>
+                                            <th style={{ width: "32px", padding: "6px 8px" }}></th>
+                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Company &amp; Website</th>
+                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Decision Maker &amp; Verified Email</th>
+                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>When Extracted</th>
+                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Email Automation (Upcoming / Past)</th>
+                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {displayedLeads.map((lead: any, li: number) => {
+                                            const contact = Array.isArray(lead.contacts) && lead.contacts.length > 0 ? lead.contacts[0] : null;
+                                            const isLeadExpanded = expandedLeadUrl === lead.job_url;
+                                            const extractionDate = lead.scraped_at || lead.created_at || job.created_at;
+
+                                            return (
+                                              <React.Fragment key={lead.job_url || li}>
+                                                <tr
+                                                  onClick={() => toggleExpandLead(lead.job_url)}
+                                                  style={{
+                                                    borderBottom: isLeadExpanded ? "none" : "1px solid var(--table-border)",
+                                                    cursor: "pointer",
+                                                    background: isLeadExpanded ? "rgba(6, 182, 212, 0.05)" : "transparent",
+                                                  }}
+                                                  onMouseEnter={(e) => {
+                                                    if (!isLeadExpanded) e.currentTarget.style.background = "var(--table-row-hover)";
+                                                  }}
+                                                  onMouseLeave={(e) => {
+                                                    if (!isLeadExpanded) e.currentTarget.style.background = "transparent";
+                                                  }}
+                                                >
+                                                  {/* Expand Lead Details Arrow */}
+                                                  <td style={{ padding: "6px 8px", textAlign: "center", verticalAlign: "middle" }}>
+                                                    <ChevronDown
+                                                      style={{
+                                                        width: "14px",
+                                                        height: "14px",
+                                                        color: isLeadExpanded ? "var(--accent-cyan)" : "var(--text-muted)",
+                                                        transform: isLeadExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                                                        transition: "transform 0.2s ease",
+                                                      }}
+                                                    />
+                                                  </td>
+
+                                                  {/* Company & Domain */}
+                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+                                                    <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+                                                      {lead.company}
+                                                    </div>
+                                                    {lead.company_domain && (
+                                                      <a
+                                                        href={lead.company_domain.startsWith("http") ? lead.company_domain : `https://${lead.company_domain}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "inline-flex", alignItems: "center", gap: "3px", marginTop: "2px" }}
+                                                      >
+                                                        <Globe style={{ width: "11px", height: "11px" }} />
+                                                        <span>{lead.company_domain}</span>
+                                                      </a>
+                                                    )}
+                                                  </td>
+
+                                                  {/* Decision Maker & Email */}
+                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+                                                    <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                                                      {contact?.name || "Executive Team"}
+                                                      {contact?.role && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({contact.role})</span>}
+                                                    </div>
+                                                    {contact?.email ? (
+                                                      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                                        <span style={{ color: "var(--accent-cyan)", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                                                          ✉ {contact.email}
+                                                        </span>
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            copyToClipboard(contact.email);
+                                                          }}
+                                                          style={{
+                                                            background: "none",
+                                                            border: "none",
+                                                            cursor: "pointer",
+                                                            color: copiedEmail === contact.email ? "var(--accent-emerald)" : "var(--text-muted)",
+                                                          }}
+                                                          title="Copy email"
+                                                        >
+                                                          {copiedEmail === contact.email ? <Check size={11} /> : <Copy size={11} />}
+                                                        </button>
+                                                        {contact.is_verified && (
+                                                          <span style={{ fontSize: "0.65rem", padding: "1px 4px", borderRadius: "3px", background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)", fontWeight: 700 }}>
+                                                            SMTP 250 OK
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    ) : (
+                                                      <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Email pending research</span>
+                                                    )}
+                                                  </td>
+
+                                                  {/* When Extracted */}
+                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)", fontSize: "0.76rem" }}>
+                                                      <Clock size={12} style={{ color: "var(--accent-indigo)" }} />
+                                                      <span>{formatDateTime(extractionDate)}</span>
+                                                    </div>
+                                                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "1px" }}>
+                                                      Batch: {job.id}
+                                                    </div>
+                                                  </td>
+
+                                                  {/* Email Automation Status */}
+                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+                                                    {lead.last_sent_at ? (
+                                                      <div>
+                                                        <span style={{ color: "var(--accent-emerald)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                                          <Check size={12} /> Sent: {formatDateTime(lead.last_sent_at)}
+                                                        </span>
+                                                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "1px" }}>
+                                                          {getStageLabel(lead.outreach_stage || 1)}
+                                                        </div>
+                                                      </div>
+                                                    ) : lead.next_send_at ? (
+                                                      <div>
+                                                        <span style={{ color: "var(--accent-cyan)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                                          <Calendar size={12} /> Next Send: {formatDate(lead.next_send_at)}
+                                                        </span>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                                          <span style={{ fontSize: "0.68rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(99, 102, 241, 0.12)", color: "var(--accent-indigo)", fontWeight: 600 }}>
+                                                            {getStageLabel(lead.outreach_stage || 1)}
+                                                          </span>
+                                                          <span style={{ fontSize: "0.68rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(16, 185, 129, 0.12)", color: "var(--accent-emerald)", fontWeight: 700 }}>
+                                                            AUTO
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                    ) : (
+                                                      <span style={{ color: "var(--text-dim)", fontSize: "0.74rem" }}>Manual outreach</span>
+                                                    )}
+                                                  </td>
+
+                                                  {/* Actions */}
+                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle", textAlign: "right" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "4px" }}>
+                                                      {lead.job_url && (
+                                                        <a
+                                                          href={lead.job_url}
+                                                          target="_blank"
+                                                          rel="noreferrer"
+                                                          onClick={(e) => e.stopPropagation()}
+                                                          className="btn btn-secondary btn-sm"
+                                                          style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                                                          title="Open LinkedIn posting"
+                                                        >
+                                                          <ExternalLink size={11} />
+                                                        </a>
+                                                      )}
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          toggleExpandLead(lead.job_url);
+                                                        }}
+                                                        className="btn btn-secondary btn-sm"
+                                                        style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                                                      >
+                                                        {isLeadExpanded ? "Hide Details" : "Details"}
+                                                      </button>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+
+                                                {/* Full Lead Intelligence Expanded Sub-Panel */}
+                                                {isLeadExpanded && (
+                                                  <tr key={`${lead.job_url}-full`}>
+                                                    <td colSpan={6} style={{ padding: "10px 14px", background: "var(--bg-card-subtle)", borderBottom: "1px solid var(--border-subtle)" }}>
+                                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                                                        {/* Contacts */}
+                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
+                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
+                                                            Contacts ({lead.contacts?.length || 0})
+                                                          </div>
+                                                          {(lead.contacts || []).map((c: any, ci: number) => (
+                                                            <div key={ci} style={{ fontSize: "0.76rem", marginBottom: "4px" }}>
+                                                              <strong>{c.name || "Contact"}</strong> — <span style={{ color: "var(--text-muted)" }}>{c.role}</span>
+                                                              {c.email && (
+                                                                <div style={{ color: "var(--accent-cyan)", fontFamily: "monospace", display: "flex", alignItems: "center", gap: "4px" }}>
+                                                                  ✉ {c.email}
+                                                                  {c.is_verified && <span style={{ color: "var(--accent-emerald)" }}>✓ 250 OK</span>}
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          ))}
+                                                        </div>
+
+                                                        {/* Company & Job Intel */}
+                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "0.76rem" }}>
+                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
+                                                            Job Intel &amp; Synthesis
+                                                          </div>
+                                                          <div>📍 Location: <strong>{lead.location || "Worldwide"}</strong></div>
+                                                          <div>🏢 Size: <strong>{lead.company_size || "1-50"}</strong></div>
+                                                          {lead.company_summary && (
+                                                            <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                                                              {lead.company_summary}
+                                                            </p>
+                                                          )}
+                                                        </div>
+
+                                                        {/* Multi-Stage Automation Drip */}
+                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "0.76rem" }}>
+                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
+                                                            Drip Journey &amp; Triggers
+                                                          </div>
+                                                          <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+                                                            {[1, 2, 3].map((st) => (
+                                                              <div
+                                                                key={st}
+                                                                style={{
+                                                                  flex: 1,
+                                                                  textAlign: "center",
+                                                                  padding: "4px",
+                                                                  borderRadius: "4px",
+                                                                  background: (lead.outreach_stage || 1) >= st ? "rgba(16, 185, 129, 0.15)" : "var(--bg-surface)",
+                                                                  color: (lead.outreach_stage || 1) >= st ? "var(--accent-emerald)" : "var(--text-muted)",
+                                                                  fontWeight: 600,
+                                                                  fontSize: "0.68rem",
+                                                                }}
+                                                              >
+                                                                Step {st}
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                          <div>Next Send: <strong>{lead.next_send_at ? formatDate(lead.next_send_at) : "None scheduled"}</strong></div>
+                                                          <div>Last Sent: <strong>{lead.last_sent_at ? formatDateTime(lead.last_sent_at) : "Not sent yet"}</strong></div>
+                                                          <button
+                                                            onClick={handleRunDueOutreach}
+                                                            className="btn btn-primary btn-sm"
+                                                            style={{ marginTop: "6px", width: "100%", fontSize: "0.75rem" }}
+                                                          >
+                                                            Dispatch Due Outreach
+                                                          </button>
+                                                        </div>
+                                                      </div>
+                                                    </td>
+                                                  </tr>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-
-                      {/* Column 6: Actions */}
-                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle", textAlign: "right" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem" }}>
-                          {isScraping && mainTab === "upcoming" && item.rawJob?.id && (
-                            <>
-                              <button
-                                onClick={() => handleRunScheduledJob(item.rawJob.id, item.title)}
-                                disabled={runningJobId === item.rawJob.id}
-                                className="btn btn-secondary"
-                                style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                                title="Run this scraping task right now"
-                              >
-                                <PlayCircle size={13} className={runningJobId === item.rawJob.id ? "spin-animation" : ""} />
-                                <span>{runningJobId === item.rawJob.id ? "Running..." : "Run Now"}</span>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteScheduledJob(item.rawJob.id, item.title)}
-                                disabled={deletingJobId === item.rawJob.id}
-                                className="btn btn-secondary"
-                                style={{ padding: "0.3rem 0.5rem", fontSize: "0.75rem", color: "var(--accent-rose)" }}
-                                title="Delete scheduled task"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </>
-                          )}
-
-                          {!isScraping && mainTab === "upcoming" && (
-                            <button
-                              onClick={handleRunDueOutreach}
-                              disabled={runningOutreach}
-                              className="btn btn-secondary"
-                              style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                              title="Trigger due mail sending"
-                            >
-                              <Send size={12} />
-                              <span>Dispatch</span>
-                            </button>
-                          )}
-
-                          {mainTab === "history" && item.rawUrl && (
-                            <a
-                              href={item.rawUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn btn-secondary"
-                              style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                            >
-                              <span>View Job</span>
-                              <ArrowUpRight size={12} />
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </React.Fragment>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
 
-          {/* Table Footer Summary */}
+          {/* Footer Bar */}
           <div
             style={{
               padding: "0.75rem 1rem",
@@ -1284,10 +1237,10 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
             }}
           >
             <div>
-              Showing <strong>{filteredList.length}</strong> of <strong>{currentList.length}</strong> {mainTab} automations
+              Showing <strong>{jobsList.length}</strong> extraction batches • Click any batch row to inspect extracted leads, extraction timestamps, and upcoming / past mail automations
             </div>
             <div>
-              Auto-refreshed with centralized SQLite database & background schedulers
+              Auto-refreshed with centralized SQLite database &amp; background schedulers
             </div>
           </div>
         </div>
