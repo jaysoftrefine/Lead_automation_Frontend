@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Zap,
   Clock,
@@ -31,6 +32,7 @@ import {
   CheckCheck,
   ListFilter,
   FileSpreadsheet,
+  X,
 } from "lucide-react";
 import { api } from "../services/api";
 
@@ -89,6 +91,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
 
   // Expanded individual lead inside job or flat view
   const [expandedLeadUrl, setExpandedLeadUrl] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
 
   // Flat view state
   const [flatMainTab, setFlatMainTab] = useState<"upcoming" | "history">("upcoming");
@@ -247,11 +250,24 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
 
   const jobsList = data?.jobs || [];
 
-  const getStageLabel = (stage: number) => {
-    if (stage === 1) return "Stage 1: Initial Outreach";
-    if (stage === 2) return "Stage 2: Follow-up";
-    if (stage === 3) return "Stage 3: Final Touch";
-    return `Stage ${stage}`;
+  const getStageLabel = (lead: { outreach_stage?: number; lead_type?: string }) => {
+    const stage = Number(lead.outreach_stage) || 1;
+    const stageName = stage === 1 ? "Initial Outreach" : stage === 2 ? "Follow-up" : "Final Follow-up";
+    const t = (lead.lead_type || "others").toLowerCase();
+    if (t === "company") return `Company - ${stageName}`;
+    if (t === "personal") return `Personal - ${stageName}`;
+    return `Stage ${stage}: ${stageName}`;
+  };
+
+  const leadTypeBadge = (leadType?: string) => {
+    const t = (leadType || "others").toLowerCase();
+    if (t === "company") {
+      return { label: "Company", bg: "rgba(6, 182, 212, 0.12)", color: "var(--accent-cyan)" };
+    }
+    if (t === "personal") {
+      return { label: "Personal", bg: "rgba(99, 102, 241, 0.12)", color: "var(--accent-indigo)" };
+    }
+    return { label: "Others", bg: "var(--chip-bg)", color: "var(--text-muted)" };
   };
 
   return (
@@ -594,16 +610,16 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
           }}
         >
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", textAlign: "left", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ background: "var(--table-header-bg)", borderBottom: "1px solid var(--border-subtle)" }}>
                   <th style={{ width: "160px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                     ID
                   </th>
-                  <th style={{ padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                  <th style={{ width: "22%", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                     JOB TITLE
                   </th>
-                  <th style={{ padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                  <th style={{ width: "18%", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                     TARGET LOCATION
                   </th>
                   <th style={{ width: "135px", padding: "0.9rem 1rem", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>
@@ -954,23 +970,31 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                         : "No leads extracted yet for this job."}
                                     </div>
                                   ) : (
-                                    <div style={{ overflowX: "auto" }}>
-                                      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
+                                    <div
+                                      className="eu-table-wrapper"
+                                      style={{
+                                        maxHeight: "390px",
+                                        overflowY: "auto",
+                                        overflowX: "auto",
+                                        border: "1px solid var(--border-subtle)",
+                                        borderRadius: "8px",
+                                      }}
+                                    >
+                                      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", textAlign: "left", fontSize: "0.82rem" }}>
                                         <thead>
-                                          <tr style={{ background: "var(--table-header-bg)", borderBottom: "1px solid var(--border-subtle)" }}>
-                                            <th style={{ width: "32px", padding: "6px 8px" }}></th>
-                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Company &amp; Website</th>
-                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Decision Maker &amp; Verified Email</th>
-                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>When Extracted</th>
-                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Email Automation (Upcoming / Past)</th>
-                                            <th style={{ padding: "6px 10px", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
+                                          <tr style={{ background: "var(--table-header-bg)", borderBottom: "1px solid var(--border-subtle)", position: "sticky", top: 0, zIndex: 2 }}>
+                                            <th style={{ width: "36px", padding: "7px 6px", textAlign: "center" }}></th>
+                                            <th style={{ width: "28%", padding: "7px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Company &amp; Website</th>
+                                            <th style={{ width: "34%", padding: "7px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Decision Maker &amp; Verified Email</th>
+                                            <th style={{ width: "26%", padding: "7px 10px", fontWeight: 600, color: "var(--text-secondary)" }}>Email Automation (Upcoming / Past)</th>
+                                            <th style={{ width: "90px", padding: "7px 10px", fontWeight: 600, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody>
                                           {displayedLeads.map((lead: any, li: number) => {
                                             const contact = Array.isArray(lead.contacts) && lead.contacts.length > 0 ? lead.contacts[0] : null;
                                             const isLeadExpanded = expandedLeadUrl === lead.job_url;
-                                            const extractionDate = lead.scraped_at || lead.created_at || job.created_at;
+                                            const typeBadge = leadTypeBadge(lead.lead_type);
 
                                             return (
                                               <React.Fragment key={lead.job_url || li}>
@@ -1003,8 +1027,22 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
 
                                                   {/* Company & Domain */}
                                                   <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
-                                                    <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>
-                                                      {lead.company}
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                                      <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+                                                        {lead.company}
+                                                      </div>
+                                                      <span
+                                                        style={{
+                                                          fontSize: "0.65rem",
+                                                          padding: "1px 6px",
+                                                          borderRadius: "999px",
+                                                          fontWeight: 600,
+                                                          background: typeBadge.bg,
+                                                          color: typeBadge.color,
+                                                        }}
+                                                      >
+                                                        {typeBadge.label}
+                                                      </span>
                                                     </div>
                                                     {lead.company_domain && (
                                                       <a
@@ -1057,17 +1095,6 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                     )}
                                                   </td>
 
-                                                  {/* When Extracted */}
-                                                  <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)", fontSize: "0.76rem" }}>
-                                                      <Clock size={12} style={{ color: "var(--accent-indigo)" }} />
-                                                      <span>{formatDateTime(extractionDate)}</span>
-                                                    </div>
-                                                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "1px" }}>
-                                                      Batch: {job.id}
-                                                    </div>
-                                                  </td>
-
                                                   {/* Email Automation Status */}
                                                   <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
                                                     {lead.last_sent_at ? (
@@ -1076,7 +1103,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                           <Check size={12} /> Sent: {formatDateTime(lead.last_sent_at)}
                                                         </span>
                                                         <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "1px" }}>
-                                                          {getStageLabel(lead.outreach_stage || 1)}
+                                                          {getStageLabel(lead)}
                                                         </div>
                                                       </div>
                                                     ) : lead.next_send_at ? (
@@ -1086,7 +1113,7 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                         </span>
                                                         <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
                                                           <span style={{ fontSize: "0.68rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(99, 102, 241, 0.12)", color: "var(--accent-indigo)", fontWeight: 600 }}>
-                                                            {getStageLabel(lead.outreach_stage || 1)}
+                                                            {getStageLabel(lead)}
                                                           </span>
                                                           <span style={{ fontSize: "0.68rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(16, 185, 129, 0.12)", color: "var(--accent-emerald)", fontWeight: 700 }}>
                                                             AUTO
@@ -1117,12 +1144,12 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                       <button
                                                         onClick={(e) => {
                                                           e.stopPropagation();
-                                                          toggleExpandLead(lead.job_url);
+                                                          setSelectedLead(lead);
                                                         }}
                                                         className="btn btn-secondary btn-sm"
-                                                        style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                                                        style={{ fontSize: "0.72rem", padding: "2px 8px" }}
                                                       >
-                                                        {isLeadExpanded ? "Hide Details" : "Details"}
+                                                        Details
                                                       </button>
                                                     </div>
                                                   </td>
@@ -1131,74 +1158,46 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
                                                 {/* Full Lead Intelligence Expanded Sub-Panel */}
                                                 {isLeadExpanded && (
                                                   <tr key={`${lead.job_url}-full`}>
-                                                    <td colSpan={6} style={{ padding: "10px 14px", background: "var(--bg-card-subtle)", borderBottom: "1px solid var(--border-subtle)" }}>
-                                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
-                                                        {/* Contacts */}
-                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
-                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
-                                                            Contacts ({lead.contacts?.length || 0})
-                                                          </div>
-                                                          {(lead.contacts || []).map((c: any, ci: number) => (
-                                                            <div key={ci} style={{ fontSize: "0.76rem", marginBottom: "4px" }}>
-                                                              <strong>{c.name || "Contact"}</strong> — <span style={{ color: "var(--text-muted)" }}>{c.role}</span>
-                                                              {c.email && (
-                                                                <div style={{ color: "var(--accent-cyan)", fontFamily: "monospace", display: "flex", alignItems: "center", gap: "4px" }}>
-                                                                  ✉ {c.email}
-                                                                  {c.is_verified && <span style={{ color: "var(--accent-emerald)" }}>✓ 250 OK</span>}
-                                                                </div>
-                                                              )}
-                                                            </div>
-                                                          ))}
-                                                        </div>
-
-                                                        {/* Company & Job Intel */}
-                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "0.76rem" }}>
-                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
-                                                            Job Intel &amp; Synthesis
-                                                          </div>
-                                                          <div>📍 Location: <strong>{lead.location || "Worldwide"}</strong></div>
-                                                          <div>🏢 Size: <strong>{lead.company_size || "1-50"}</strong></div>
-                                                          {lead.company_summary && (
-                                                            <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                                                              {lead.company_summary}
-                                                            </p>
+                                                    <td
+                                                      colSpan={5}
+                                                      style={{
+                                                        padding: "8px 14px",
+                                                        background: "var(--bg-card-subtle)",
+                                                        borderBottom: "1px solid var(--border-subtle)",
+                                                      }}
+                                                    >
+                                                      <div
+                                                        style={{
+                                                          display: "flex",
+                                                          alignItems: "center",
+                                                          justifyContent: "space-between",
+                                                          flexWrap: "wrap",
+                                                          gap: "10px",
+                                                          fontSize: "0.78rem",
+                                                        }}
+                                                      >
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+                                                          <span>📍 <strong>{lead.location || "Worldwide (Remote)"}</strong></span>
+                                                          <span>🏢 <strong>{lead.company_size || "1-50 employees"}</strong></span>
+                                                          {contact?.email && (
+                                                            <span style={{ color: "var(--accent-cyan)", fontFamily: "monospace" }}>
+                                                              ✉ {contact.email} {contact.is_verified && <strong style={{ color: "var(--accent-emerald)" }}>✓ 250 OK</strong>}
+                                                            </span>
                                                           )}
+                                                          <span>
+                                                            Stage: <strong>{getStageLabel(lead)}</strong>
+                                                          </span>
                                                         </div>
-
-                                                        {/* Multi-Stage Automation Drip */}
-                                                        <div style={{ background: "var(--bg-card)", padding: "10px", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "0.76rem" }}>
-                                                          <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: "6px" }}>
-                                                            Drip Journey &amp; Triggers
-                                                          </div>
-                                                          <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
-                                                            {[1, 2, 3].map((st) => (
-                                                              <div
-                                                                key={st}
-                                                                style={{
-                                                                  flex: 1,
-                                                                  textAlign: "center",
-                                                                  padding: "4px",
-                                                                  borderRadius: "4px",
-                                                                  background: (lead.outreach_stage || 1) >= st ? "rgba(16, 185, 129, 0.15)" : "var(--bg-surface)",
-                                                                  color: (lead.outreach_stage || 1) >= st ? "var(--accent-emerald)" : "var(--text-muted)",
-                                                                  fontWeight: 600,
-                                                                  fontSize: "0.68rem",
-                                                                }}
-                                                              >
-                                                                Step {st}
-                                                              </div>
-                                                            ))}
-                                                          </div>
-                                                          <div>Next Send: <strong>{lead.next_send_at ? formatDate(lead.next_send_at) : "None scheduled"}</strong></div>
-                                                          <div>Last Sent: <strong>{lead.last_sent_at ? formatDateTime(lead.last_sent_at) : "Not sent yet"}</strong></div>
-                                                          <button
-                                                            onClick={handleRunDueOutreach}
-                                                            className="btn btn-primary btn-sm"
-                                                            style={{ marginTop: "6px", width: "100%", fontSize: "0.75rem" }}
-                                                          >
-                                                            Dispatch Due Outreach
-                                                          </button>
-                                                        </div>
+                                                        <button
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedLead(lead);
+                                                          }}
+                                                          className="btn btn-primary btn-sm"
+                                                          style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                                                        >
+                                                          Open Full Dossier ↗
+                                                        </button>
                                                       </div>
                                                     </td>
                                                   </tr>
@@ -1245,6 +1244,200 @@ export function AutomationHub({ onToast, onUpdateBadge }: AutomationHubProps) {
           </div>
         </div>
       )}
+
+      {/* Full Lead Dossier & Automations Modal */}
+      {selectedLead &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 999999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
+              backdropFilter: "blur(8px)",
+              padding: "1rem",
+            }}
+            onClick={() => setSelectedLead(null)}
+          >
+            <div
+              className="modal-dialog glass-card"
+              style={{
+                width: "100%",
+                maxWidth: "680px",
+                maxHeight: "88vh",
+                overflowY: "auto",
+                padding: "1.5rem",
+                background: "var(--bg-card)",
+                borderRadius: "var(--radius-lg, 12px)",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.1rem" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {selectedLead.company}
+                  </h3>
+                  <div style={{ color: "var(--accent-cyan)", fontSize: "0.85rem", marginTop: "3px" }}>
+                    {selectedLead.title || selectedLead.job_title || "Lead Dossier & Automation"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedLead(null)}
+                  className="btn-icon-ghost"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px" }}
+                >
+                  <X style={{ width: "18px", height: "18px" }} />
+                </button>
+              </div>
+
+              {/* Quick Info Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                  marginBottom: "1.2rem",
+                  fontSize: "0.82rem",
+                  background: "var(--bg-card-subtle)",
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-subtle)",
+                }}
+              >
+                <div>📍 <strong>Location:</strong> {selectedLead.location || "Worldwide (Remote)"}</div>
+                <div>🏢 <strong>Company Size:</strong> {selectedLead.company_size || "1-50 employees"}</div>
+                <div>
+                  🌐 <strong>Website:</strong>{" "}
+                  {selectedLead.company_domain ? (
+                    <a
+                      href={selectedLead.company_domain.startsWith("http") ? selectedLead.company_domain : `https://${selectedLead.company_domain}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent-cyan)", textDecoration: "none" }}
+                    >
+                      {selectedLead.company_domain} ↗
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </div>
+                <div>
+                  🕒 <strong>When Extracted:</strong>{" "}
+                  {formatDateTime(selectedLead.scraped_at || selectedLead.created_at)}
+                </div>
+                <div>
+                  ⚡ <strong>Stage:</strong> {getStageLabel(selectedLead)}
+                </div>
+                <div>
+                  📅 <strong>Next Send:</strong>{" "}
+                  {selectedLead.next_send_at ? formatDate(selectedLead.next_send_at) : "None scheduled"}
+                </div>
+                {selectedLead.last_sent_at && (
+                  <div>
+                    ✓ <strong>Last Sent:</strong> {formatDateTime(selectedLead.last_sent_at)}
+                  </div>
+                )}
+                {selectedLead.job_url && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    💼 <strong>Job Posting:</strong>{" "}
+                    <a
+                      href={selectedLead.job_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "var(--accent-cyan)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <ExternalLink size={11} /> Open LinkedIn Post
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Contacts Section */}
+              {selectedLead.contacts && selectedLead.contacts.length > 0 && (
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <h4 style={{ fontSize: "0.88rem", marginBottom: "0.6rem", color: "var(--accent-cyan)", fontWeight: 700 }}>
+                    Decision Makers &amp; Direct Emails ({selectedLead.contacts.length})
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {selectedLead.contacts.map((c: any, i: number) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-subtle)",
+                          padding: "10px 12px",
+                          borderRadius: "6px",
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                          {c.name} — <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>{c.role}</span>
+                        </div>
+                        {c.email && (
+                          <div style={{ color: "var(--accent-cyan)", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px", fontFamily: "monospace" }}>
+                            ✉ {c.email}
+                            <button
+                              onClick={() => copyToClipboard(c.email)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: copiedEmail === c.email ? "var(--accent-emerald)" : "var(--text-muted)" }}
+                              title="Copy email"
+                            >
+                              {copiedEmail === c.email ? <Check size={12} /> : <Copy size={12} />}
+                            </button>
+                            {c.is_verified && (
+                              <span style={{ fontSize: "0.68rem", padding: "1px 5px", borderRadius: "3px", background: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)", fontWeight: 700 }}>
+                                SMTP 250 OK
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Intel Summary */}
+              {selectedLead.company_summary && (
+                <div style={{ marginBottom: "1.2rem", fontSize: "0.82rem" }}>
+                  <h4 style={{ fontSize: "0.88rem", marginBottom: "0.4rem", color: "var(--text-primary)", fontWeight: 700 }}>
+                    Company Intelligence
+                  </h4>
+                  <div style={{ padding: "10px 12px", background: "var(--bg-card-subtle)", borderRadius: "6px", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    {selectedLead.company_summary}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "1.2rem", paddingTop: "0.8rem", borderTop: "1px solid var(--border-subtle)" }}>
+                <button onClick={() => setSelectedLead(null)} className="btn btn-secondary btn-sm" style={{ padding: "6px 14px" }}>
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    handleRunDueOutreach();
+                    setSelectedLead(null);
+                  }}
+                  className="btn btn-primary btn-sm"
+                  style={{ padding: "6px 14px", display: "flex", alignItems: "center", gap: "5px" }}
+                >
+                  <Send size={13} /> Dispatch Due Outreach
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
