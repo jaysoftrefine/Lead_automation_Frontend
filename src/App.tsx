@@ -7,6 +7,7 @@ import { InstantAgentLab } from "./views/InstantAgentLab";
 import { EUStartupsExplorer } from "./views/EUStartupsExplorer";
 import { EmailCampaigns } from "./views/EmailCampaigns";
 import { AutomationHub } from "./views/AutomationHub";
+import { PersonalWorkspace } from "./views/PersonalWorkspace";
 import { api } from "./services/api";
 
 export interface ToastItem {
@@ -18,6 +19,9 @@ export interface ToastItem {
 export function App() {
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("hirepilot_theme") || localStorage.getItem("leadpulse_theme") || "light";
+  });
+  const [workspaceMode, setWorkspaceMode] = useState<"company" | "personal">(() => {
+    return (localStorage.getItem("hirepilot_workspace_mode") as "company" | "personal") || "company";
   });
   const [activeTab, setActiveTab] = useState("pipeline");
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
@@ -35,6 +39,17 @@ export function App() {
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  const handleToggleWorkspaceMode = (mode: "company" | "personal") => {
+    setWorkspaceMode(mode);
+    localStorage.setItem("hirepilot_workspace_mode", mode);
+    showToast(
+      mode === "personal"
+        ? "Switched to Personal Career & Freelance Hub"
+        : "Switched to Company B2B Lead Engine",
+      "info"
+    );
   };
 
   const showToast = (message: string, type: string = "info") => {
@@ -82,56 +97,68 @@ export function App() {
         isPipelineRunning={isPipelineRunning}
         theme={theme}
         onToggleTheme={toggleTheme}
+        workspaceMode={workspaceMode}
+        onToggleWorkspaceMode={handleToggleWorkspaceMode}
       />
 
-      {/* Main Tab Navigation */}
-      <Navigation
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        leadsCount={leadsCount}
-        euCount={euCount}
-        templatesCount={templatesCount}
-        automationsUpcomingCount={automationsUpcomingCount}
-        isRunning={isPipelineRunning}
-      />
-
-      {/* Active Tab View */}
-      <main style={{ marginTop: "0.25rem" }}>
-        <div style={{ display: activeTab === "pipeline" ? "block" : "none" }}>
-          <PipelineRunner
-            onToast={showToast}
-            onStatusChange={(running) => {
-              setIsPipelineRunning(running);
-              // Refresh badge counts when pipeline finishes
-              if (!running) loadGlobalStats();
-            }}
+      {/* When in Personal Workspace Mode */}
+      {workspaceMode === "personal" ? (
+        <main style={{ marginTop: "1rem" }}>
+          <PersonalWorkspace onToast={showToast} />
+        </main>
+      ) : (
+        /* When in Company Mode */
+        <>
+          {/* Main Tab Navigation */}
+          <Navigation
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            leadsCount={leadsCount}
+            euCount={euCount}
+            templatesCount={templatesCount}
+            automationsUpcomingCount={automationsUpcomingCount}
+            isRunning={isPipelineRunning}
           />
-        </div>
 
-        {activeTab === "leads" && <LeadsExplorer onToast={showToast} />}
+          {/* Active Tab View */}
+          <main style={{ marginTop: "0.25rem" }}>
+            <div style={{ display: activeTab === "pipeline" ? "block" : "none" }}>
+              <PipelineRunner
+                onToast={showToast}
+                onStatusChange={(running) => {
+                  setIsPipelineRunning(running);
+                  // Refresh badge counts when pipeline finishes
+                  if (!running) loadGlobalStats();
+                }}
+              />
+            </div>
 
-        {activeTab === "instant-research" && (
-          <InstantAgentLab onToast={showToast} onRefreshStats={loadGlobalStats} />
-        )}
+            {activeTab === "leads" && <LeadsExplorer onToast={showToast} />}
 
-        {activeTab === "eu-startups" && <EUStartupsExplorer onToast={showToast} />}
+            {activeTab === "instant-research" && (
+              <InstantAgentLab onToast={showToast} onRefreshStats={loadGlobalStats} />
+            )}
 
-        {activeTab === "email" && (
-          <EmailCampaigns
-            onToast={showToast}
-            onUpdateBadge={(cnt: number) => setTemplatesCount(cnt)}
-            showSmtpModalDirect={showSmtpModal}
-            onCloseSmtpModalDirect={() => setShowSmtpModal(false)}
-          />
-        )}
+            {activeTab === "eu-startups" && <EUStartupsExplorer onToast={showToast} />}
 
-        {activeTab === "automations" && (
-          <AutomationHub
-            onToast={showToast}
-            onUpdateBadge={(cnt: number) => setAutomationsUpcomingCount(cnt)}
-          />
-        )}
-      </main>
+            {activeTab === "email" && (
+              <EmailCampaigns
+                onToast={showToast}
+                onUpdateBadge={(cnt: number) => setTemplatesCount(cnt)}
+                showSmtpModalDirect={showSmtpModal}
+                onCloseSmtpModalDirect={() => setShowSmtpModal(false)}
+              />
+            )}
+
+            {activeTab === "automations" && (
+              <AutomationHub
+                onToast={showToast}
+                onUpdateBadge={(cnt: number) => setAutomationsUpcomingCount(cnt)}
+              />
+            )}
+          </main>
+        </>
+      )}
 
       {/* Toast Notification Container */}
       <div className="toast-container">
@@ -146,3 +173,4 @@ export function App() {
 }
 
 export default App;
+

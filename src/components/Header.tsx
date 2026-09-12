@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Zap, Clock, Sun, Moon } from "lucide-react";
+import { Zap, Clock, Sun, Moon, Building2, Briefcase } from "lucide-react";
 
 export interface HeaderProps {
   stats?: any;
@@ -7,9 +7,17 @@ export interface HeaderProps {
   theme: string;
   onToggleTheme: () => void;
   onOpenSmtp?: () => void;
+  workspaceMode?: "company" | "personal";
+  onToggleWorkspaceMode?: (mode: "company" | "personal") => void;
 }
 
-export function Header({ isPipelineRunning, theme, onToggleTheme }: HeaderProps) {
+export function Header({
+  isPipelineRunning,
+  theme,
+  onToggleTheme,
+  workspaceMode = "company",
+  onToggleWorkspaceMode,
+}: HeaderProps) {
   const [timeStr, setTimeStr] = useState("");
   const [dateStr, setDateStr] = useState("");
 
@@ -32,6 +40,7 @@ export function Header({ isPipelineRunning, theme, onToggleTheme }: HeaderProps)
   }, []);
 
   const isLight = theme === "light";
+  const isPersonal = workspaceMode === "personal";
 
   return (
     <header className="glass-card header-bar" style={{ padding: "0.9rem 1.25rem" }}>
@@ -45,28 +54,74 @@ export function Header({ isPipelineRunning, theme, onToggleTheme }: HeaderProps)
               width: "38px",
               height: "38px",
               borderRadius: "10px",
-              background: "linear-gradient(135deg, #6366f1, #06b6d4)",
+              background: isPersonal
+                ? "linear-gradient(135deg, #06b6d4, #3b82f6)"
+                : "linear-gradient(135deg, #6366f1, #06b6d4)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 0 16px rgba(99, 102, 241, 0.4)",
+              boxShadow: isPersonal
+                ? "0 0 16px rgba(6, 182, 212, 0.45)"
+                : "0 0 16px rgba(99, 102, 241, 0.4)",
+              transition: "all 0.3s ease",
             }}
           >
-            <Zap style={{ width: "20px", height: "20px", color: "#fff" }} />
+            {isPersonal ? (
+              <Briefcase style={{ width: "20px", height: "20px", color: "#fff" }} />
+            ) : (
+              <Zap style={{ width: "20px", height: "20px", color: "#fff" }} />
+            )}
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <h1 style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
                 HirePilot <span style={{ color: "var(--accent-cyan)" }}>AI</span>
               </h1>
-              <span className="platform-badge accent" style={{ fontSize: "0.68rem" }}>
-                B2B Lead Engine
+              <span
+                className="platform-badge accent"
+                style={{
+                  fontSize: "0.68rem",
+                  background: isPersonal ? "rgba(6, 182, 212, 0.18)" : undefined,
+                  borderColor: isPersonal ? "rgba(6, 182, 212, 0.35)" : undefined,
+                  color: isPersonal ? "var(--accent-cyan)" : undefined,
+                }}
+              >
+                {isPersonal ? "Personal Career Hub" : "B2B Lead Engine"}
               </span>
             </div>
             <p style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "2px" }}>
-              Autonomous Scraping, AI Enrichment &amp; Email Marketing
+              {isPersonal
+                ? "Personal Opportunity Finder • Tech Jobs, Freelance Contracts & Recruiters"
+                : "Autonomous Scraping, AI Enrichment & Email Marketing"}
             </p>
           </div>
+        </div>
+
+        {/* Center: Workspace Mode Switcher Toggle */}
+        <div className="workspace-toggle-wrapper" role="tablist" aria-label="Workspace Mode Switcher">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={workspaceMode === "company"}
+            onClick={() => onToggleWorkspaceMode?.("company")}
+            className={`workspace-toggle-btn ${workspaceMode === "company" ? "active" : ""}`}
+            title="Switch to Company B2B Lead Engine"
+          >
+            <Building2 style={{ width: "14px", height: "14px" }} />
+            <span>Company Leads</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={workspaceMode === "personal"}
+            onClick={() => onToggleWorkspaceMode?.("personal")}
+            className={`workspace-toggle-btn personal ${workspaceMode === "personal" ? "active personal" : ""}`}
+            title="Switch to Personal Career & Freelance Search"
+          >
+            <Briefcase style={{ width: "14px", height: "14px" }} />
+            <span>Personal Search</span>
+            <span className="workspace-badge-new">NEW</span>
+          </button>
         </div>
 
         {/* Right: Clock, Status & Actions */}

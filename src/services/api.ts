@@ -415,4 +415,76 @@ export const api = {
     fetchJson(`/api/email/queue/clear?status=${encodeURIComponent(status)}`, {
       method: "POST",
     }),
+
+  // Personal Workspace Auto-Pilot API
+  getPersonalProfile: () => fetchJson<{ status: string; data: any }>("/api/personal/profile"),
+  updatePersonalProfile: (payload: any) =>
+    fetchJson<{ status: string; message: string; data: any }>("/api/personal/profile", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  uploadPersonalResume: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    const primaryUrl = `${apiBase}/api/personal/resume`;
+    let res: Response;
+    try {
+      res = await fetch(primaryUrl, {
+        method: "POST",
+        body: formData,
+      });
+    } catch (e) {
+      res = await fetch("/api/personal/resume", {
+        method: "POST",
+        body: formData,
+      });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || data.message || "Failed to upload resume");
+    }
+    return data;
+  },
+  generatePersonalEmail: (payload: {
+    job_title: string;
+    company_name: string;
+    job_location?: string;
+    job_description?: string;
+    recruiter_name?: string;
+    recruiter_email?: string;
+  }) =>
+    fetchJson<{ status: string; data: { subject: string; body: string; has_resume: boolean; resume_name?: string } }>(
+      "/api/personal/generate-email",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
+  sendPersonalApplication: (payload: {
+    to_email: string;
+    recipient_name?: string;
+    company_name: string;
+    job_title: string;
+    subject: string;
+    body: string;
+    opportunity_id?: string;
+    smtp_account_id?: string;
+    resume_path?: string;
+    resume_name?: string;
+  }) =>
+    fetchJson<{ status: string; message: string; attachment_sent: boolean }>("/api/personal/send-application", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  searchPersonalJobs: (params: { role?: string; location?: string; results_wanted?: number; is_remote?: boolean }) => {
+    const q = new URLSearchParams({
+      role: params.role || "Python Developer",
+      location: params.location || "Remote",
+      results_wanted: String(params.results_wanted || 15),
+      is_remote: String(params.is_remote ?? true),
+    }).toString();
+    return fetchJson<{ status: string; count: number; data: any[] }>(`/api/personal/search-jobs?${q}`);
+  },
 };
+
