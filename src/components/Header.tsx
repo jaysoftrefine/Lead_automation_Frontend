@@ -43,53 +43,53 @@ export function Header({
   const isPersonal = workspaceMode === "personal";
 
   return (
-    <header className="glass-card header-bar" style={{ padding: "0.9rem 1.25rem" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
+    <header className="glass-card header-bar">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.2rem" }}>
         
         {/* Left: Brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.95rem" }}>
           <div
             className="brand-logo-icon"
             style={{
-              width: "38px",
-              height: "38px",
-              borderRadius: "10px",
+              width: "42px",
+              height: "42px",
+              borderRadius: "12px",
               background: isPersonal
-                ? "linear-gradient(135deg, #06b6d4, #3b82f6)"
-                : "linear-gradient(135deg, #6366f1, #06b6d4)",
+                ? "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)"
+                : "linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               boxShadow: isPersonal
-                ? "0 0 16px rgba(6, 182, 212, 0.45)"
-                : "0 0 16px rgba(99, 102, 241, 0.4)",
-              transition: "all 0.3s ease",
+                ? "0 4px 18px rgba(6, 182, 212, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3)"
+                : "0 4px 18px rgba(99, 102, 241, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3)",
+              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           >
             {isPersonal ? (
-              <Briefcase style={{ width: "20px", height: "20px", color: "#fff" }} />
+              <Briefcase style={{ width: "22px", height: "22px", color: "#fff" }} />
             ) : (
-              <Zap style={{ width: "20px", height: "20px", color: "#fff" }} />
+              <Zap style={{ width: "22px", height: "22px", color: "#fff" }} />
             )}
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <h1 style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+              <h1 style={{ fontSize: "1.28rem", fontWeight: 800, letterSpacing: "-0.03em" }}>
                 HirePilot <span style={{ color: "var(--accent-cyan)" }}>AI</span>
               </h1>
               <span
                 className="platform-badge accent"
                 style={{
                   fontSize: "0.68rem",
-                  background: isPersonal ? "rgba(6, 182, 212, 0.18)" : undefined,
-                  borderColor: isPersonal ? "rgba(6, 182, 212, 0.35)" : undefined,
+                  background: isPersonal ? "rgba(6, 182, 212, 0.16)" : undefined,
+                  borderColor: isPersonal ? "rgba(6, 182, 212, 0.38)" : undefined,
                   color: isPersonal ? "var(--accent-cyan)" : undefined,
                 }}
               >
                 {isPersonal ? "Personal Career Hub" : "B2B Lead Engine"}
               </span>
             </div>
-            <p style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "2px" }}>
+            <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "2px", fontWeight: 500 }}>
               {isPersonal
                 ? "Personal Opportunity Finder • Tech Jobs, Freelance Contracts & Recruiters"
                 : "Autonomous Scraping, AI Enrichment & Email Marketing"}
@@ -132,14 +132,14 @@ export function Header({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "0.35rem 0.75rem",
+              gap: "8px",
+              padding: "0.42rem 0.9rem",
               borderRadius: "var(--radius-full)",
               fontSize: "0.78rem",
             }}
           >
-            <span className={`pulse-dot ${isPipelineRunning ? "running" : ""}`} />
-            <span style={{ color: isPipelineRunning ? "var(--accent-emerald)" : "var(--text-muted)", fontWeight: 600 }}>
+            <span className={`pulse-dot ${isPipelineRunning ? "running" : ""}`} style={{ background: isPipelineRunning ? "var(--accent-emerald)" : "#10b981", boxShadow: "0 0 8px rgba(16, 185, 129, 0.4)" }} />
+            <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
               {isPipelineRunning ? "Pipeline Running" : "Engine Ready"}
             </span>
           </div>
@@ -150,17 +150,16 @@ export function Header({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "0.35rem 0.75rem",
+              gap: "7px",
+              padding: "0.42rem 0.9rem",
               borderRadius: "var(--radius-full)",
               fontSize: "0.78rem",
               fontFamily: "var(--font-mono)",
-              color: "var(--text-secondary)",
             }}
           >
             <Clock style={{ width: "13px", height: "13px", color: "var(--accent-cyan)" }} />
-            <span>{timeStr || "12:00:00"}</span>
-            <span style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>• {dateStr}</span>
+            <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{timeStr || "12:00:00"}</span>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>• {dateStr}</span>
           </div>
 
           {/* Theme Switcher Toggle */}
@@ -172,9 +171,9 @@ export function Header({
           >
             <div className="theme-toggle-icon-wrap">
               {isLight ? (
-                <Sun className="theme-icon sun-icon" style={{ width: "15px", height: "15px", color: "#f59e0b" }} />
+                <Sun className="theme-icon sun-icon" style={{ width: "16px", height: "16px", color: "#f59e0b" }} />
               ) : (
-                <Moon className="theme-icon moon-icon" style={{ width: "15px", height: "15px", color: "#818cf8" }} />
+                <Moon className="theme-icon moon-icon" style={{ width: "16px", height: "16px", color: "#818cf8" }} />
               )}
             </div>
             <span className="theme-toggle-label">

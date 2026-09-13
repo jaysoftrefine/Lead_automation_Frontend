@@ -55,6 +55,29 @@ export interface OpportunityItem {
   status?: "saved" | "applied" | "interviewing" | "offer";
 }
 
+const getCompanyGradient = (name: string) => {
+  const gradients = [
+    "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+    "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)",
+    "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    "linear-gradient(135deg, #ec4899 0%, #a855f7 100%)",
+    "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+    "linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%)",
+  ];
+  let hash = 0;
+  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+};
+
+const getCompanyInitials = (name: string) => {
+  if (!name) return "CO";
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+};
+
 const INITIAL_OPPORTUNITIES: OpportunityItem[] = [
   {
     id: "opp-in-1",
@@ -499,78 +522,61 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
         style={{ display: "none" }}
       />
 
-      {/* Hero / Quick Search Bar Header */}
+      {/* Hero / Candidate Intelligence Bar */}
       <div className="glass-card personal-hero-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1.25rem" }}>
           <div>
             <div className="personal-hero-badge">
               <Sparkles style={{ width: "13px", height: "13px" }} />
               <span>Personal Auto-Pilot &amp; Career Hub</span>
             </div>
-            <h2 style={{ fontSize: "1.45rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.025em" }}>
               Find Your Next Tech Job &amp; Auto-Apply with AI
             </h2>
-            <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", marginTop: "4px", maxWidth: "680px" }}>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "4px", maxWidth: "680px" }}>
               Upload your resume once: AI writes personalized application pitches matching each role and automatically sends them with your resume PDF attached.
             </p>
           </div>
 
           {/* Quick Metrics */}
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div className="header-pill" style={{ padding: "0.5rem 0.85rem", background: "var(--chip-bg)", borderRadius: "var(--radius-md)" }}>
-              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block" }}>Tech Jobs</span>
-              <strong style={{ fontSize: "1.05rem", color: "var(--accent-cyan)" }}>{totalJobsCount} Available</strong>
+            <div className="personal-metric-pill">
+              <span className="personal-metric-label">Tech Jobs</span>
+              <span className="personal-metric-val" style={{ color: "var(--accent-cyan)" }}>
+                {totalJobsCount} Available
+              </span>
             </div>
-            <div className="header-pill" style={{ padding: "0.5rem 0.85rem", background: "var(--chip-bg)", borderRadius: "var(--radius-md)" }}>
-              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block" }}>Freelance / Gigs</span>
-              <strong style={{ fontSize: "1.05rem", color: "var(--accent-emerald)" }}>{totalFreelanceCount} Available</strong>
+            <div className="personal-metric-pill">
+              <span className="personal-metric-label">Freelance / Gigs</span>
+              <span className="personal-metric-val" style={{ color: "var(--accent-emerald)" }}>
+                {totalFreelanceCount} Available
+              </span>
             </div>
-            <div className="header-pill" style={{ padding: "0.5rem 0.85rem", background: "var(--chip-bg)", borderRadius: "var(--radius-md)" }}>
-              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block" }}>Applications</span>
-              <strong style={{ fontSize: "1.05rem", color: "#f59e0b" }}>{appliedCount} Applied</strong>
+            <div className="personal-metric-pill">
+              <span className="personal-metric-label">Applications</span>
+              <span className="personal-metric-val" style={{ color: "#f59e0b" }}>
+                {appliedCount} Applied
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Candidate Auto-Pilot Control & Resume Upload Deck */}
-        <div
-          style={{
-            marginTop: "1.2rem",
-            padding: "1rem",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "var(--radius-md)",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "1rem",
-            alignItems: "center",
-          }}
-        >
+        {/* Candidate Auto-Pilot Control & Resume Vault */}
+        <div className="candidate-deck">
           {/* Left: Resume Box */}
-          <div
-            style={{
-              padding: "0.85rem",
-              background: profile.resume_exists ? "rgba(16, 185, 129, 0.08)" : "rgba(6, 182, 212, 0.05)",
-              border: profile.resume_exists ? "1px dashed rgba(16, 185, 129, 0.4)" : "1px dashed rgba(6, 182, 212, 0.3)",
-              borderRadius: "var(--radius-md)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", overflow: "hidden" }}>
+          <div className="resume-vault-box">
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", overflow: "hidden" }}>
               {profile.resume_exists ? (
-                <FileCheck style={{ width: "26px", height: "26px", color: "var(--accent-emerald)", flexShrink: 0 }} />
+                <FileCheck style={{ width: "24px", height: "24px", color: "var(--accent-emerald)", flexShrink: 0 }} />
               ) : (
-                <Upload style={{ width: "26px", height: "26px", color: "var(--accent-cyan)", flexShrink: 0 }} />
+                <Upload style={{ width: "24px", height: "24px", color: "var(--accent-cyan)", flexShrink: 0 }} />
               )}
               <div style={{ overflow: "hidden" }}>
                 <div style={{ fontSize: "0.84rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {profile.resume_name ? profile.resume_name : "Upload Candidate Resume (PDF)"}
+                  {profile.resume_name ? profile.resume_name : "Candidate Resume"}
                 </div>
                 <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                  {profile.resume_exists ? "Ready for AI auto-generation & email attachment" : "AI will parse skills & attach to all applications"}
+                  {profile.resume_exists ? "Verified for AI auto-generation" : "Attach PDF to activate auto-apply"}
                 </div>
               </div>
             </div>
@@ -583,11 +589,11 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
               style={{
                 flexShrink: 0,
                 fontSize: "0.75rem",
-                padding: "0.35rem 0.65rem",
+                padding: "0.35rem 0.7rem",
                 display: "flex",
                 alignItems: "center",
-                gap: "4px",
-                background: "var(--chip-bg)",
+                gap: "5px",
+                borderRadius: "var(--radius-full)",
               }}
             >
               {isUploadingResume ? (
@@ -600,114 +606,89 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
           </div>
 
           {/* Center: Target Role, Location & Experience */}
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ flex: 1, minWidth: "130px" }}>
-              <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "2px" }}>
-                Target Role
-              </label>
+          <div className="candidate-field-group">
+            <div className="candidate-field">
+              <label>Target Role</label>
               <input
                 type="text"
                 value={profile.target_role}
                 onChange={(e) => setProfile({ ...profile, target_role: e.target.value })}
-                placeholder="e.g. Python / React Dev"
-                style={{
-                  width: "100%",
-                  fontSize: "0.78rem",
-                  padding: "0.35rem 0.5rem",
-                  background: "var(--chip-bg)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "4px",
-                  color: "var(--text-primary)",
-                }}
+                placeholder="e.g. Python Backend Engineer"
               />
             </div>
 
-            <div style={{ flex: 1, minWidth: "120px" }}>
-              <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "2px" }}>
-                Location
-              </label>
+            <div className="candidate-field">
+              <label>Location</label>
               <input
                 type="text"
                 value={profile.target_location}
                 onChange={(e) => setProfile({ ...profile, target_location: e.target.value })}
                 placeholder="e.g. Remote / India / US"
-                style={{
-                  width: "100%",
-                  fontSize: "0.78rem",
-                  padding: "0.35rem 0.5rem",
-                  background: "var(--chip-bg)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "4px",
-                  color: "var(--text-primary)",
-                }}
               />
             </div>
 
-            <div style={{ width: "100px" }}>
-              <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "2px" }}>
-                Experience
-              </label>
+            <div className="candidate-field" style={{ maxWidth: "120px" }}>
+              <label>Experience</label>
               <input
                 type="text"
                 value={profile.experience_years}
                 onChange={(e) => setProfile({ ...profile, experience_years: e.target.value })}
                 placeholder="e.g. 3+ yrs"
-                style={{
-                  width: "100%",
-                  fontSize: "0.78rem",
-                  padding: "0.35rem 0.5rem",
-                  background: "var(--chip-bg)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "4px",
-                  color: "var(--text-primary)",
-                }}
               />
             </div>
           </div>
 
           {/* Right: Actions */}
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <div className="candidate-actions">
             <button
               type="button"
               onClick={handleSaveProfile}
               disabled={isSavingProfile}
-              className="action-btn-sm"
-              style={{ fontSize: "0.75rem", padding: "0.4rem 0.75rem" }}
-              title="Save preferences"
+              className="candidate-save-btn"
+              title="Save career preferences"
             >
-              {isSavingProfile ? "Saving..." : "Save Preferences"}
+              {isSavingProfile ? (
+                <>
+                  <Loader2 style={{ width: "13px", height: "13px", animation: "spin 1s linear infinite" }} />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check style={{ width: "13px", height: "13px" }} />
+                  <span>Save Preferences</span>
+                </>
+              )}
             </button>
 
             <button
               type="button"
               onClick={handleSearchLiveJobs}
               disabled={isSearchingJobs}
-              className="primary-btn"
-              style={{
-                fontSize: "0.75rem",
-                padding: "0.4rem 0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
+              className="candidate-search-btn"
+              title="Search live job boards"
             >
               {isSearchingJobs ? (
-                <Loader2 style={{ width: "13px", height: "13px", animation: "spin 1s linear infinite" }} />
+                <>
+                  <Loader2 style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }} />
+                  <span>Searching...</span>
+                </>
               ) : (
-                <Globe style={{ width: "13px", height: "13px" }} />
+                <>
+                  <Globe style={{ width: "14px", height: "14px" }} />
+                  <span>Live Job Search</span>
+                </>
               )}
-              <span>Live Job Search</span>
             </button>
           </div>
         </div>
 
-        {/* Search & Filter Controls */}
-        <div className="personal-search-box" style={{ marginTop: "1rem" }}>
+        {/* Command Filter Dock */}
+        <div className="personal-filter-dock">
           <div className="personal-search-input-wrap">
-            <Search />
+            <Search className="search-icon" />
             <input
               type="text"
-              placeholder="Search roles, skills (e.g. Python, FastAPI, React, Scraping, Remote)..."
+              placeholder="Search roles, skills (e.g. Python, FastAPI, React, Remote)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="personal-search-input"
@@ -718,10 +699,10 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
           <select
             value={selectedWorkplace}
             onChange={(e) => setSelectedWorkplace(e.target.value)}
-            className="personal-select"
+            className="personal-select personal-filter-select"
             aria-label="Filter by Workplace"
           >
-            <option value="all">🌐 Any Workplace (Remote + On-site)</option>
+            <option value="all">🌐 Any Workplace (Remote &amp; On-site)</option>
             <option value="Remote">🏠 100% Remote</option>
             <option value="Hybrid">🏢 Hybrid</option>
             <option value="On-site">📍 On-site</option>
@@ -731,7 +712,7 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="personal-select"
+            className="personal-select personal-filter-select"
             aria-label="Filter by Contract Type"
           >
             <option value="all">💼 All Types (Job &amp; Gigs)</option>
@@ -740,36 +721,28 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
             <option value="Contract">📄 Contract / Project</option>
           </select>
 
-          {/* Quick preset buttons */}
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            <button
-              onClick={() => setSearchQuery("Python")}
-              className="personal-subnav-btn"
-              style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", background: "var(--chip-bg)" }}
-            >
-              #Python
-            </button>
-            <button
-              onClick={() => setSearchQuery("React")}
-              className="personal-subnav-btn"
-              style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", background: "var(--chip-bg)" }}
-            >
-              #React
-            </button>
-            <button
-              onClick={() => setSearchQuery("FastAPI")}
-              className="personal-subnav-btn"
-              style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", background: "var(--chip-bg)" }}
-            >
-              #FastAPI
-            </button>
-            <button
-              onClick={() => setSearchQuery("")}
-              className="personal-subnav-btn"
-              style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}
-            >
-              Clear
-            </button>
+          {/* Quick preset chips */}
+          <div className="personal-preset-chips">
+            {["Python", "React", "FastAPI"].map((skill) => (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => setSearchQuery(searchQuery === skill ? "" : skill)}
+                className={`skill-chip ${searchQuery === skill ? "active" : ""}`}
+              >
+                #{skill}
+              </button>
+            ))}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="skill-chip"
+                style={{ opacity: 0.8 }}
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -780,31 +753,34 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
           onClick={() => setActiveTab("all")}
           className={`personal-subnav-btn ${activeTab === "all" ? "active" : ""}`}
         >
-          <TrendingUp style={{ width: "15px", height: "15px" }} />
-          <span>All Opportunities ({opportunities.length})</span>
+          <TrendingUp style={{ width: "14px", height: "14px" }} />
+          <span>All Opportunities</span>
+          <span className="subnav-badge">{opportunities.length}</span>
         </button>
 
         <button
           onClick={() => setActiveTab("jobs")}
           className={`personal-subnav-btn ${activeTab === "jobs" ? "active" : ""}`}
         >
-          <Briefcase style={{ width: "15px", height: "15px" }} />
-          <span>Job Hunter ({totalJobsCount})</span>
+          <Briefcase style={{ width: "14px", height: "14px" }} />
+          <span>Job Hunter</span>
+          <span className="subnav-badge">{totalJobsCount}</span>
         </button>
 
         <button
           onClick={() => setActiveTab("freelance")}
           className={`personal-subnav-btn ${activeTab === "freelance" ? "active" : ""}`}
         >
-          <Sparkles style={{ width: "15px", height: "15px" }} />
-          <span>Freelance &amp; Contracts ({totalFreelanceCount})</span>
+          <Sparkles style={{ width: "14px", height: "14px" }} />
+          <span>Freelance &amp; Contracts</span>
+          <span className="subnav-badge">{totalFreelanceCount}</span>
         </button>
 
         <button
           onClick={() => setActiveTab("recruiters")}
           className={`personal-subnav-btn ${activeTab === "recruiters" ? "active" : ""}`}
         >
-          <UserCheck style={{ width: "15px", height: "15px" }} />
+          <UserCheck style={{ width: "14px", height: "14px" }} />
           <span>Hiring Contacts &amp; HR</span>
         </button>
 
@@ -812,8 +788,9 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
           onClick={() => setActiveTab("tracker")}
           className={`personal-subnav-btn ${activeTab === "tracker" ? "active" : ""}`}
         >
-          <CheckCircle2 style={{ width: "15px", height: "15px" }} />
-          <span>Application Tracker ({appliedCount})</span>
+          <CheckCircle2 style={{ width: "14px", height: "14px" }} />
+          <span>Application Tracker</span>
+          <span className="subnav-badge">{appliedCount}</span>
         </button>
       </div>
 
@@ -916,37 +893,50 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
         </div>
       ) : (
         /* Opportunity Cards Grid */
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1.15rem" }}>
           {filteredOpportunities.map((opp) => {
             const isFreelance = opp.type === "Freelance" || opp.type === "Contract";
 
             return (
               <div key={opp.id} className="glass-card opportunity-card">
                 <div>
-                  {/* Top row: Type badge & bookmark */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <span
-                        className="platform-badge"
-                        style={{
-                          background: isFreelance ? "rgba(16, 185, 129, 0.15)" : "rgba(6, 182, 212, 0.15)",
-                          color: isFreelance ? "var(--accent-emerald)" : "var(--accent-cyan)",
-                          borderColor: isFreelance ? "rgba(16, 185, 129, 0.3)" : "rgba(6, 182, 212, 0.3)",
-                        }}
+                  {/* Top row: Company avatar monogram, badges, & bookmark */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                      <div
+                        className="company-avatar-pill"
+                        style={{ background: getCompanyGradient(opp.company) }}
+                        title={opp.company}
                       >
-                        {opp.type}
-                      </span>
-                      <span className="platform-badge" style={{ fontSize: "0.68rem" }}>
-                        {opp.workplace}
-                      </span>
-                      {opp.status === "applied" && (
-                        <span
-                          className="platform-badge"
-                          style={{ fontSize: "0.65rem", background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}
-                        >
-                          ✓ Applied
-                        </span>
-                      )}
+                        {getCompanyInitials(opp.company)}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <span
+                            className="platform-badge"
+                            style={{
+                              background: isFreelance ? "rgba(16, 185, 129, 0.14)" : "rgba(6, 182, 212, 0.14)",
+                              color: isFreelance ? "var(--accent-emerald)" : "var(--accent-cyan)",
+                              borderColor: isFreelance ? "rgba(16, 185, 129, 0.35)" : "rgba(6, 182, 212, 0.35)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {opp.type}
+                          </span>
+                          <span className="platform-badge" style={{ fontSize: "0.68rem" }}>
+                            {opp.workplace}
+                          </span>
+                          {opp.status === "applied" && (
+                            <span
+                              className="platform-badge"
+                              style={{ fontSize: "0.65rem", background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}
+                            >
+                              ✓ Applied
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <button
@@ -957,50 +947,44 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                         border: "none",
                         color: opp.status ? "var(--accent-cyan)" : "var(--text-muted)",
                         cursor: "pointer",
-                        padding: "4px",
+                        padding: "6px",
+                        borderRadius: "var(--radius-sm)",
+                        transition: "all 0.18s ease",
                       }}
                       title={opp.status ? "Saved in Tracker" : "Save to Tracker"}
                     >
                       {opp.status ? (
-                        <BookmarkCheck style={{ width: "18px", height: "18px" }} />
+                        <BookmarkCheck style={{ width: "19px", height: "19px" }} />
                       ) : (
-                        <Bookmark style={{ width: "18px", height: "18px" }} />
+                        <Bookmark style={{ width: "19px", height: "19px" }} />
                       )}
                     </button>
                   </div>
 
                   {/* Title & Company */}
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "0 0 4px 0" }}>{opp.title}</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "0.6rem" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "0 0 5px 0", letterSpacing: "-0.015em", lineHeight: "1.35" }}>
+                    {opp.title}
+                  </h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.75rem", flexWrap: "wrap" }}>
                     <Building2 style={{ width: "13px", height: "13px", color: "var(--accent-cyan)" }} />
                     <span style={{ fontWeight: 600 }}>{opp.company}</span>
-                    <span>•</span>
+                    <span style={{ opacity: 0.5 }}>•</span>
                     <MapPin style={{ width: "13px", height: "13px", color: "var(--text-muted)" }} />
                     <span>{opp.location}</span>
                   </div>
 
-                  {/* Pay / Rate */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      fontSize: "0.88rem",
-                      fontWeight: 700,
-                      color: isFreelance ? "var(--accent-emerald)" : "var(--accent-cyan)",
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    <DollarSign style={{ width: "15px", height: "15px" }} />
+                  {/* Pay / Rate Badge */}
+                  <div className="opportunity-pay-badge">
+                    <DollarSign style={{ width: "14px", height: "14px" }} />
                     <span>{opp.payRange}</span>
                   </div>
 
                   {/* Description */}
                   <p
                     style={{
-                      fontSize: "0.8rem",
+                      fontSize: "0.82rem",
                       color: "var(--text-muted)",
-                      lineHeight: "1.45",
+                      lineHeight: "1.5",
                       marginBottom: "0.85rem",
                       display: "-webkit-box",
                       WebkitLineClamp: 3,
@@ -1022,16 +1006,16 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                 </div>
 
                 {/* Recruiter & Action footer */}
-                <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.5rem" }}>
+                <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.85rem", marginTop: "0.5rem" }}>
                   {opp.recruiterName && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.65rem", fontSize: "0.75rem" }}>
+                    <div className="recruiter-contact-bar">
                       <span style={{ color: "var(--text-secondary)" }}>
                         Contact: <strong>{opp.recruiterName}</strong>
                       </span>
                       {opp.recruiterEmail && (
                         <a
                           href={`mailto:${opp.recruiterEmail}`}
-                          style={{ color: "var(--accent-cyan)", textDecoration: "none", display: "flex", alignItems: "center", gap: "3px" }}
+                          style={{ color: "var(--accent-cyan)", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}
                         >
                           <Mail style={{ width: "12px", height: "12px" }} />
                           <span>{opp.recruiterEmail}</span>
@@ -1040,25 +1024,15 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                     </div>
                   )}
 
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <div className="opp-card-actions">
                     {/* Primary Auto-Apply Button */}
                     <button
                       type="button"
                       onClick={() => handleOpenAutoApply(opp)}
-                      className="primary-btn"
-                      style={{
-                        flex: 1.2,
-                        fontSize: "0.78rem",
-                        padding: "0.45rem 0.75rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.4rem",
-                        background: "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)",
-                      }}
+                      className="opp-apply-btn"
                       title="AI will craft pitch and send email with resume"
                     >
-                      <Sparkles style={{ width: "13px", height: "13px" }} />
+                      <Sparkles style={{ width: "14px", height: "14px" }} />
                       <span>Auto-Apply (AI + Resume)</span>
                     </button>
 
@@ -1066,17 +1040,10 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                     <button
                       type="button"
                       onClick={() => copyPitchText(opp)}
-                      className="action-btn-sm"
-                      style={{
-                        padding: "0.45rem 0.65rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "3px",
-                        fontSize: "0.75rem",
-                      }}
+                      className="opp-pitch-btn"
                       title="Copy outreach email draft"
                     >
-                      <Copy style={{ width: "12px", height: "12px" }} />
+                      <Copy style={{ width: "13px", height: "13px" }} />
                       <span>Pitch</span>
                     </button>
 
@@ -1085,13 +1052,7 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                         href={opp.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="theme-toggle-btn"
-                        style={{
-                          padding: "0.45rem 0.65rem",
-                          display: "flex",
-                          alignItems: "center",
-                          textDecoration: "none",
-                        }}
+                        className="opp-link-btn"
                         title="Open posting in new tab"
                       >
                         <ExternalLink style={{ width: "14px", height: "14px" }} />

@@ -14,6 +14,9 @@ import {
   FileSpreadsheet,
   Download,
   X,
+  Copy,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { api, getPipelineWsUrl } from "../services/api";
 
@@ -43,8 +46,17 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
 
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
+
+  const handleCopyLogs = () => {
+    const text = terminalLogs.join("\n");
+    navigator.clipboard.writeText(text);
+    setCopiedLogs(true);
+    onToast("Terminal logs copied to clipboard!", "info");
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
 
   const handleUploadSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,33 +410,61 @@ export function PipelineRunner({ onToast, onStatusChange }: PipelineRunnerProps)
         {/* Quick Stats Pills */}
         <div style={{ display: "flex", gap: "0.75rem", margin: "0.85rem 0", flexWrap: "wrap" }}>
           <div className="camp-stat-pill info">
-            <span>{metrics.scraped}</span> Scraped Jobs
+            <span style={{ fontWeight: 800 }}>{metrics.scraped}</span> Scraped Jobs
           </div>
           <div className="camp-stat-pill success">
-            <span>{metrics.enriched}</span> Enriched Leads
+            <span style={{ fontWeight: 800 }}>{metrics.enriched}</span> Enriched Leads
           </div>
           <div className="camp-stat-pill" style={{ background: "var(--chip-bg)", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)" }}>
-            Status: <span style={{ textTransform: "capitalize", marginLeft: "4px" }}>{metrics.status}</span>
+            Engine: <span style={{ textTransform: "capitalize", marginLeft: "4px", color: isRunning ? "var(--accent-emerald)" : "var(--text-muted)", fontWeight: 600 }}>{metrics.status}</span>
           </div>
         </div>
 
         {/* Terminal Window */}
         <div className="terminal-window" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div className="terminal-header">
-            <div className="terminal-dots">
-              <div className="terminal-dot red" />
-              <div className="terminal-dot yellow" />
-              <div className="terminal-dot green" />
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div className="terminal-dots">
+                <div className="terminal-dot red" />
+                <div className="terminal-dot yellow" />
+                <div className="terminal-dot green" />
+              </div>
+              <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 500 }}>
+                hirepilot-agent-stdout • zsh
+              </span>
             </div>
-            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>hirepilot-agent-stdout</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={handleCopyLogs}
+                className="btn-icon-ghost"
+                style={{ width: "26px", height: "26px", borderRadius: "6px" }}
+                title="Copy Terminal Output"
+              >
+                {copiedLogs ? <Check style={{ width: "13px", height: "13px", color: "#10b981" }} /> : <Copy style={{ width: "13px", height: "13px" }} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTerminalLogs(["hirepilot-agent-stdout cleared."])}
+                className="btn-icon-ghost"
+                style={{ width: "26px", height: "26px", borderRadius: "6px" }}
+                title="Clear Terminal"
+              >
+                <Trash2 style={{ width: "13px", height: "13px" }} />
+              </button>
+            </div>
           </div>
           <div className="terminal-body">
             {terminalLogs.map((line, idx) => (
-              <div key={idx} style={{ marginBottom: "3px" }}>
-                <span style={{ color: "var(--accent-cyan)", marginRight: "6px" }}>&gt;</span>
-                <span>{line}</span>
+              <div key={idx} style={{ marginBottom: "5px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                <span style={{ color: "var(--accent-cyan)", opacity: 0.7, userSelect: "none" }}>❯</span>
+                <span style={{ flex: 1, wordBreak: "break-word" }}>{line}</span>
               </div>
             ))}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px", opacity: 0.7, color: "var(--accent-cyan)", fontSize: "0.76rem" }}>
+              <span style={{ color: "var(--text-dim)" }}>agent@hirepilot:~$</span>
+              <span style={{ animation: "pulseRunning 1s infinite" }}>▋</span>
+            </div>
             <div ref={terminalEndRef} />
           </div>
         </div>
