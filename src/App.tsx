@@ -8,6 +8,7 @@ import { EUStartupsExplorer } from "./views/EUStartupsExplorer";
 import { EmailCampaigns } from "./views/EmailCampaigns";
 import { AutomationHub } from "./views/AutomationHub";
 import { PersonalWorkspace } from "./views/PersonalWorkspace";
+import { SmtpConfigModal } from "./components/email/modals/SmtpConfigModal";
 import { api } from "./services/api";
 
 export interface ToastItem {
@@ -104,7 +105,10 @@ export function App() {
       {/* When in Personal Workspace Mode */}
       {workspaceMode === "personal" ? (
         <main style={{ marginTop: "1rem" }}>
-          <PersonalWorkspace onToast={showToast} />
+          <PersonalWorkspace
+            onToast={showToast}
+            onOpenSmtp={() => setShowSmtpModal(true)}
+          />
         </main>
       ) : (
         /* When in Company Mode */
@@ -145,7 +149,7 @@ export function App() {
               <EmailCampaigns
                 onToast={showToast}
                 onUpdateBadge={(cnt: number) => setTemplatesCount(cnt)}
-                showSmtpModalDirect={showSmtpModal}
+                showSmtpModalDirect={false}
                 onCloseSmtpModalDirect={() => setShowSmtpModal(false)}
               />
             )}
@@ -159,6 +163,13 @@ export function App() {
           </main>
         </>
       )}
+
+      {/* Global SMTP Configuration Modal */}
+      <SmtpConfigModal
+        isOpen={showSmtpModal}
+        onClose={() => setShowSmtpModal(false)}
+        onToast={showToast}
+      />
 
       {/* Toast Notification Container */}
       <div className="toast-container">

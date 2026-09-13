@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Zap, Clock, Sun, Moon, Building2, Briefcase } from "lucide-react";
+import { Zap, Clock, Sun, Moon, Building2, Briefcase, Mail } from "lucide-react";
 
 export interface HeaderProps {
   stats?: any;
@@ -15,6 +15,7 @@ export function Header({
   isPipelineRunning,
   theme,
   onToggleTheme,
+  onOpenSmtp,
   workspaceMode = "company",
   onToggleWorkspaceMode,
 }: HeaderProps) {
@@ -161,6 +162,18 @@ export function Header({
             <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{timeStr || "12:00:00"}</span>
             <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>• {dateStr}</span>
           </div>
+
+          {/* SMTP Settings Button */}
+          <button
+            type="button"
+            onClick={onOpenSmtp}
+            className="header-pill smtp-pill-btn"
+            title="Configure SMTP Email Accounts"
+            aria-label="Configure SMTP"
+          >
+            <Mail style={{ width: "13px", height: "13px", color: isPersonal ? "var(--accent-cyan)" : "var(--accent-indigo)" }} />
+            <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>SMTP</span>
+          </button>
 
           {/* Theme Switcher Toggle */}
           <button

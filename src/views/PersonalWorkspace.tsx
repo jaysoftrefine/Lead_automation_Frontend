@@ -32,9 +32,11 @@ import {
 } from "lucide-react";
 import { api } from "../services/api";
 import { Modal } from "../components/common/Modal";
+import { SmtpConfigModal } from "../components/email/modals/SmtpConfigModal";
 
 export interface PersonalWorkspaceProps {
   onToast: (msg: string, type?: string) => void;
+  onOpenSmtp?: () => void;
 }
 
 export interface OpportunityItem {
@@ -235,11 +237,20 @@ const INITIAL_OPPORTUNITIES: OpportunityItem[] = [
   },
 ];
 
-export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
+export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"all" | "jobs" | "freelance" | "recruiters" | "tracker">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkplace, setSelectedWorkplace] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+
+  const handleOpenSmtp = () => {
+    if (onOpenSmtp) {
+      onOpenSmtp();
+    } else {
+      setShowSmtpModal(true);
+    }
+  };
 
   // Profile & Auto-Pilot State
   const [profile, setProfile] = useState<{
@@ -459,7 +470,11 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
       onToast(`Application sent to ${applyRecipientEmail} with resume attached!`, "success");
       setApplyOpp(null);
     } catch (err: any) {
-      onToast(err.message || "Failed to send email via SMTP", "error");
+      const msg = err.message || "Failed to send email via SMTP";
+      onToast(msg, "error");
+      if (msg.toLowerCase().includes("smtp is not configured")) {
+        handleOpenSmtp();
+      }
     } finally {
       setIsSendingApplication(false);
     }
@@ -678,6 +693,16 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
                   <span>Live Job Search</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenSmtp}
+              className="candidate-smtp-btn"
+              title="Configure personal email accounts (Gmail, Outlook, custom SMTP) for sending job applications"
+            >
+              <Mail style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
+              <span>Email (SMTP) Setup</span>
             </button>
           </div>
         </div>
@@ -1228,46 +1253,78 @@ export function PersonalWorkspace({ onToast }: PersonalWorkspaceProps) {
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
               <button
                 type="button"
-                onClick={() => setApplyOpp(null)}
-                disabled={isSendingApplication}
+                onClick={handleOpenSmtp}
                 className="action-btn-sm"
-                style={{ padding: "0.5rem 1rem" }}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSendApplication}
-                disabled={isSendingApplication || isGeneratingEmail || !applyRecipientEmail.trim()}
-                className="primary-btn"
                 style={{
-                  padding: "0.5rem 1.25rem",
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
-                  background: "linear-gradient(135deg, #06b6d4 0%, #10b981 100%)",
+                  fontSize: "0.76rem",
+                  color: "var(--accent-cyan)",
+                  borderColor: "rgba(6, 182, 212, 0.4)",
+                  background: "rgba(6, 182, 212, 0.08)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0.48rem 0.85rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
                 }}
+                title="Configure or change SMTP email account settings"
               >
-                {isSendingApplication ? (
-                  <>
-                    <Loader2 style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }} />
-                    <span>Dispatching Application...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send style={{ width: "14px", height: "14px" }} />
-                    <span>Send Application with Resume</span>
-                  </>
-                )}
+                <Mail style={{ width: "13px", height: "13px" }} />
+                <span>Configure SMTP</span>
               </button>
+
+              <div style={{ display: "flex", gap: "0.65rem", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => setApplyOpp(null)}
+                  disabled={isSendingApplication}
+                  className="action-btn-sm"
+                  style={{ padding: "0.5rem 1rem" }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSendApplication}
+                  disabled={isSendingApplication || isGeneratingEmail || !applyRecipientEmail.trim()}
+                  className="primary-btn"
+                  style={{
+                    padding: "0.5rem 1.25rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "linear-gradient(135deg, #06b6d4 0%, #10b981 100%)",
+                  }}
+                >
+                  {isSendingApplication ? (
+                    <>
+                      <Loader2 style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }} />
+                      <span>Dispatching Application...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send style={{ width: "14px", height: "14px" }} />
+                      <span>Send Application with Resume</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </Modal>
       )}
+
+      {/* Smtp Configuration Modal for Personal Workspace */}
+      <SmtpConfigModal
+        isOpen={showSmtpModal}
+        onClose={() => setShowSmtpModal(false)}
+        onToast={onToast}
+      />
     </div>
   );
 }
