@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Eye, Mail, FileText } from "lucide-react";
 import { api } from "../../../services/api";
 import { Modal } from "../../common/Modal";
 
@@ -9,6 +10,11 @@ export interface CampaignLogItem {
   company_name?: string;
   status: "sent" | "failed" | string;
   error_message?: string;
+  subject?: string;
+  body?: string;
+  sent_at?: string;
+  attachment_name?: string;
+  sender_email?: string;
 }
 
 export interface CampaignLogsModalProps {
@@ -24,6 +30,7 @@ export function CampaignLogsModal({
 }: CampaignLogsModalProps) {
   const [logs, setLogs] = useState<CampaignLogItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [viewEmail, setViewEmail] = useState<CampaignLogItem | null>(null);
 
   useEffect(() => {
     if (!campaign) return;
@@ -92,6 +99,7 @@ export function CampaignLogsModal({
                   <th>Email</th>
                   <th>Company</th>
                   <th>Status</th>
+                  <th>Content</th>
                   <th>Error Info</th>
                 </tr>
               </thead>
@@ -135,6 +143,29 @@ export function CampaignLogsModal({
                         </span>
                       )}
                     </td>
+                    <td>
+                      {l.body || l.subject ? (
+                        <button
+                          type="button"
+                          onClick={() => setViewEmail(l)}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            fontSize: "0.72rem",
+                            padding: "0.2rem 0.5rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            color: "var(--accent-cyan)",
+                          }}
+                          title="View exact sent email"
+                        >
+                          <Eye style={{ width: "12px", height: "12px" }} />
+                          <span>View Mail</span>
+                        </button>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>—</span>
+                      )}
+                    </td>
                     <td style={{ color: "#fb7185", fontSize: "0.72rem" }}>
                       {l.error_message || "—"}
                     </td>
@@ -143,6 +174,78 @@ export function CampaignLogsModal({
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* View Sent Email Modal */}
+        {viewEmail && (
+          <Modal
+            isOpen={true}
+            onClose={() => setViewEmail(null)}
+            maxWidth="680px"
+            title={`Sent Mail: ${viewEmail.company_name || viewEmail.recipient_email}`}
+            subtitle={`Dispatched to ${viewEmail.recipient_email}`}
+            footer={
+              <button
+                type="button"
+                onClick={() => setViewEmail(null)}
+                className="btn btn-secondary btn-sm"
+              >
+                Close
+              </button>
+            }
+          >
+            <div style={{ padding: "0 1.25rem 1rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div
+                style={{
+                  background: "var(--chip-bg)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "0.75rem",
+                  fontSize: "0.8rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                }}
+              >
+                <div><strong>To:</strong> {viewEmail.recipient_email}</div>
+                {viewEmail.subject && (
+                  <div><strong style={{ color: "var(--accent-cyan)" }}>Subject:</strong> {viewEmail.subject}</div>
+                )}
+                {viewEmail.attachment_name && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "var(--accent-emerald)" }}>
+                    <FileText style={{ width: "13px", height: "13px" }} />
+                    <strong>Attachment:</strong> {viewEmail.attachment_name}
+                  </div>
+                )}
+                {viewEmail.sent_at && (
+                  <div style={{ color: "var(--text-muted)" }}>
+                    <strong>Sent:</strong> {new Date(viewEmail.sent_at).toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                  EMAIL BODY:
+                </label>
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0.85rem",
+                    fontSize: "0.82rem",
+                    lineHeight: "1.6",
+                    whiteSpace: "pre-wrap",
+                    maxHeight: "320px",
+                    overflowY: "auto",
+                  }}
+                >
+                  {viewEmail.body || "No email body recorded."}
+                </div>
+              </div>
+            </div>
+          </Modal>
         )}
       </div>
     </Modal>

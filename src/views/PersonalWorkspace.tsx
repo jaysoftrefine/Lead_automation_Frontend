@@ -29,6 +29,7 @@ import {
   Loader2,
   AlertCircle,
   FileCheck,
+  Eye,
 } from "lucide-react";
 import { api } from "../services/api";
 import { Modal } from "../components/common/Modal";
@@ -37,6 +38,7 @@ import { SmtpConfigModal } from "../components/email/modals/SmtpConfigModal";
 export interface PersonalWorkspaceProps {
   onToast: (msg: string, type?: string) => void;
   onOpenSmtp?: () => void;
+  onSwitchToCompany?: () => void;
 }
 
 export interface OpportunityItem {
@@ -55,6 +57,11 @@ export interface OpportunityItem {
   recruiterEmail?: string;
   recruiterLinkedIn?: string;
   status?: "saved" | "applied" | "interviewing" | "offer";
+  subject?: string;
+  body?: string;
+  sentAt?: string;
+  senderEmail?: string;
+  attachmentName?: string;
 }
 
 const getCompanyGradient = (name: string) => {
@@ -237,8 +244,8 @@ const INITIAL_OPPORTUNITIES: OpportunityItem[] = [
   },
 ];
 
-export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"all" | "jobs" | "freelance" | "recruiters" | "tracker">("all");
+export function PersonalWorkspace({ onToast, onOpenSmtp, onSwitchToCompany }: PersonalWorkspaceProps) {
+  const [activeTab, setActiveTab] = useState<"all" | "applied" | "jobs" | "freelance" | "recruiters" | "tracker">("applied");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkplace, setSelectedWorkplace] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -301,13 +308,65 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
   const [applyBody, setApplyBody] = useState("");
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [isSendingApplication, setIsSendingApplication] = useState(false);
+  const [viewEmailModal, setViewEmailModal] = useState<OpportunityItem | null>(null);
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false);
+
+  // Load sent applications from backend database
+  const loadApplicationsFromBackend = async () => {
+    setIsLoadingApplications(true);
+    try {
+      const res = await api.getPersonalApplications();
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        const backendItems: OpportunityItem[] = res.data.map((app: any) => {
+          const rawSubj = app.subject || "";
+          const cleanTitle = rawSubj
+            ? rawSubj.replace(/^Application:\s*/i, "").replace(/\s*–.*$/, "").replace(/\s*-.*$/, "").trim()
+            : "Software Development Engineer";
+
+          return {
+            id: app.id,
+            title: cleanTitle || "Software Development Engineer",
+            company: app.company_name || "Tech Company",
+            location: "India / Remote",
+            type: "Full-time",
+            workplace: "Hybrid",
+            payRange: "Competitive / Junior SDE",
+            tags: ["Junior SDE", "Python", "Applied"],
+            description: app.body ? app.body.slice(0, 260) + "..." : "Application sent with resume attached.",
+            postedDate: app.sent_at ? new Date(app.sent_at).toLocaleDateString() : "Today",
+            recruiterName: app.recipient_name || "Hiring Team",
+            recruiterEmail: app.recipient_email,
+            status: "applied" as const,
+            subject: app.subject,
+            body: app.body,
+            sentAt: app.sent_at,
+            senderEmail: app.sender_email,
+            attachmentName: app.attachment_name || "Jay_Kakadia_Resume.pdf",
+          };
+        });
+
+        setOpportunities((prev) => {
+          const backendIds = new Set(backendItems.map((b) => b.id));
+          const backendCompanies = new Set(backendItems.map((b) => (b.company || "").toLowerCase().trim()));
+          const nonDupPrev = prev.filter(
+            (p) => !backendIds.has(p.id) && !backendCompanies.has((p.company || "").toLowerCase().trim())
+          );
+          return [...backendItems, ...nonDupPrev];
+        });
+      }
+    } catch (err) {
+      console.warn("Could not load backend applications:", err);
+    } finally {
+      setIsLoadingApplications(false);
+    }
+  };
 
   // Sync to local storage
   useEffect(() => {
     localStorage.setItem("jay_saved_opportunities", JSON.stringify(opportunities));
   }, [opportunities]);
 
-  // Load profile from backend on mount
+  // Load profile & backend applications on mount
   useEffect(() => {
     api
       .getPersonalProfile()
@@ -319,6 +378,8 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
       .catch((err) => {
         console.warn("Could not load personal profile:", err);
       });
+
+    loadApplicationsFromBackend();
   }, []);
 
   // Update application status
@@ -484,6 +545,7 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
   const filteredOpportunities = useMemo(() => {
     return opportunities.filter((item) => {
       // Tab filter
+      if (activeTab === "applied" && item.status !== "applied") return false;
       if (activeTab === "jobs" && item.type !== "Full-time") return false;
       if (activeTab === "freelance" && item.type !== "Freelance" && item.type !== "Contract") return false;
       if (activeTab === "recruiters" && !item.recruiterEmail && !item.recruiterName) return false;
@@ -569,10 +631,58 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
             </div>
             <div className="personal-metric-pill">
               <span className="personal-metric-label">Applications</span>
-              <span className="personal-metric-val" style={{ color: "#f59e0b" }}>
-                {appliedCount} Applied
+              <span className="personal-metric-val" style={{ color: "#10b981", fontWeight: 800 }}>
+                {appliedCount} Sent
               </span>
             </div>
+
+            <button
+              type="button"
+              onClick={loadApplicationsFromBackend}
+              disabled={isLoadingApplications}
+              className="action-btn-sm"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "0.75rem",
+                padding: "0.4rem 0.75rem",
+                borderRadius: "var(--radius-md)",
+              }}
+              title="Re-sync latest sent applications from backend"
+            >
+              <RefreshCw
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  animation: isLoadingApplications ? "spin 1s linear infinite" : undefined,
+                }}
+              />
+              <span>{isLoadingApplications ? "Syncing..." : "Sync Logs"}</span>
+            </button>
+
+            {onSwitchToCompany && (
+              <button
+                type="button"
+                onClick={onSwitchToCompany}
+                className="action-btn-sm"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "0.75rem",
+                  padding: "0.4rem 0.85rem",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(99, 102, 241, 0.12)",
+                  color: "#818cf8",
+                  borderColor: "rgba(99, 102, 241, 0.3)",
+                  cursor: "pointer",
+                }}
+              >
+                <Building2 style={{ width: "13px", height: "13px" }} />
+                <span>Company Engine</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -775,6 +885,24 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
       {/* Sub-Navigation Tabs */}
       <div className="personal-subnav">
         <button
+          onClick={() => setActiveTab("applied")}
+          className={`personal-subnav-btn ${activeTab === "applied" ? "active" : ""}`}
+        >
+          <Mail style={{ width: "14px", height: "14px", color: "var(--accent-cyan)" }} />
+          <span>Sent Applications</span>
+          <span
+            className="subnav-badge"
+            style={{
+              background: "rgba(6, 182, 212, 0.2)",
+              color: "var(--accent-cyan)",
+              fontWeight: 700,
+            }}
+          >
+            {appliedCount}
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("all")}
           className={`personal-subnav-btn ${activeTab === "all" ? "active" : ""}`}
         >
@@ -872,17 +1000,40 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
                         {item.payRange}
                       </div>
 
-                      {/* Move to next stage button */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem" }}>
-                        <button
-                          onClick={() => handleOpenAutoApply(item)}
-                          className="action-btn-sm"
-                          style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem", display: "flex", alignItems: "center", gap: "3px" }}
-                          title="Auto-Apply / Preview AI Pitch"
-                        >
-                          <Send style={{ width: "11px", height: "11px", color: "var(--accent-cyan)" }} />
-                          <span>Apply</span>
-                        </button>
+                      {/* Move to next stage button or View Sent Mail */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", gap: "0.4rem" }}>
+                        {item.body ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewEmailModal(item)}
+                            className="action-btn-sm"
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.22rem 0.55rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              background: "rgba(6, 182, 212, 0.14)",
+                              color: "var(--accent-cyan)",
+                              borderColor: "rgba(6, 182, 212, 0.4)",
+                              fontWeight: 600,
+                            }}
+                            title="View exact sent email and attached resume"
+                          >
+                            <Eye style={{ width: "11px", height: "11px" }} />
+                            <span>Sent Mail</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenAutoApply(item)}
+                            className="action-btn-sm"
+                            style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem", display: "flex", alignItems: "center", gap: "3px" }}
+                            title="Auto-Apply / Preview AI Pitch"
+                          >
+                            <Send style={{ width: "11px", height: "11px", color: "var(--accent-cyan)" }} />
+                            <span>Apply</span>
+                          </button>
+                        )}
 
                         <select
                           value={item.status || "saved"}
@@ -1050,16 +1201,38 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
                   )}
 
                   <div className="opp-card-actions">
-                    {/* Primary Auto-Apply Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAutoApply(opp)}
-                      className="opp-apply-btn"
-                      title="AI will craft pitch and send email with resume"
-                    >
-                      <Sparkles style={{ width: "14px", height: "14px" }} />
-                      <span>Auto-Apply (AI + Resume)</span>
-                    </button>
+                    {/* Auto Apply Primary vs View Sent Mail */}
+                    {opp.status === "applied" && opp.body ? (
+                      <button
+                        type="button"
+                        onClick={() => setViewEmailModal(opp)}
+                        className="primary-btn"
+                        style={{
+                          flex: 1,
+                          fontSize: "0.78rem",
+                          padding: "0.45rem 0.8rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          background: "linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)",
+                        }}
+                        title="View exact sent email & attached resume"
+                      >
+                        <Eye style={{ width: "13px", height: "13px" }} />
+                        <span>View Sent Mail</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAutoApply(opp)}
+                        className="opp-apply-btn"
+                        title="Draft email & apply with attached resume"
+                      >
+                        <Send style={{ width: "13px", height: "13px" }} />
+                        <span>Auto-Apply (AI + Resume)</span>
+                      </button>
+                    )}
 
                     {/* Copy Pitch Draft secondary */}
                     <button
@@ -1313,6 +1486,135 @@ export function PersonalWorkspace({ onToast, onOpenSmtp }: PersonalWorkspaceProp
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Sent Email Details Modal */}
+      {viewEmailModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setViewEmailModal(null)}
+          maxWidth="720px"
+          title={
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  background: "rgba(6, 182, 212, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--accent-cyan)",
+                }}
+              >
+                <Mail style={{ width: "16px", height: "16px" }} />
+              </div>
+              <span style={{ fontSize: "1.05rem", fontWeight: 700 }}>
+                Sent Application: {viewEmailModal.company || "Job Opportunity"}
+              </span>
+            </div>
+          }
+          subtitle={
+            <span>
+              Applied for <strong>{viewEmailModal.title}</strong>
+            </span>
+          }
+          footer={
+            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                Delivered via Gmail SMTP • {viewEmailModal.sentAt ? new Date(viewEmailModal.sentAt).toLocaleString() : "Recently"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewEmailModal(null)}
+                className="primary-btn"
+                style={{ fontSize: "0.8rem", padding: "0.4rem 1.1rem" }}
+              >
+                Close
+              </button>
+            </div>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {/* Meta Headers Card */}
+            <div
+              style={{
+                background: "var(--chip-bg)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-md)",
+                padding: "0.85rem 1rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+                fontSize: "0.82rem",
+              }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>To:</span>
+                <span style={{ fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+                  {viewEmailModal.recruiterName ? `${viewEmailModal.recruiterName} <${viewEmailModal.recruiterEmail}>` : viewEmailModal.recruiterEmail}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>From:</span>
+                <span style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                  {viewEmailModal.senderEmail || "jaykakadia3@gmail.com"}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Subject:</span>
+                <span style={{ fontWeight: 700, color: "var(--accent-cyan)" }}>
+                  {viewEmailModal.subject || `Application: ${viewEmailModal.title} – Jay Kakadia`}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Attachment:</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-emerald)", fontWeight: 600 }}>
+                  <FileText style={{ width: "14px", height: "14px" }} />
+                  <span>{viewEmailModal.attachmentName || "Jay_Kakadia_Resume.pdf"}</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>(Attached &amp; Delivered)</span>
+                </span>
+              </div>
+
+              {viewEmailModal.sentAt && (
+                <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Sent Date:</span>
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {new Date(viewEmailModal.sentAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Email Body */}
+            <div>
+              <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                SENT EMAIL BODY:
+              </label>
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "1.1rem",
+                  fontSize: "0.84rem",
+                  lineHeight: "1.65",
+                  color: "var(--text-primary)",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "inherit",
+                  maxHeight: "360px",
+                  overflowY: "auto",
+                }}
+              >
+                {viewEmailModal.body || "No email body recorded."}
               </div>
             </div>
           </div>

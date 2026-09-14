@@ -108,6 +108,7 @@ export function App() {
           <PersonalWorkspace
             onToast={showToast}
             onOpenSmtp={() => setShowSmtpModal(true)}
+            onSwitchToCompany={() => handleToggleWorkspaceMode("company")}
           />
         </main>
       ) : (
@@ -116,7 +117,13 @@ export function App() {
           {/* Main Tab Navigation */}
           <Navigation
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={(tab) => {
+              if (tab === "personal-jobs") {
+                handleToggleWorkspaceMode("personal");
+              } else {
+                setActiveTab(tab);
+              }
+            }}
             leadsCount={leadsCount}
             euCount={euCount}
             templatesCount={templatesCount}

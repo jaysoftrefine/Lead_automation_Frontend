@@ -1,5 +1,5 @@
 import React from "react";
-import { PlayCircle, Database, Bot, Building2, Mail, Zap } from "lucide-react";
+import { PlayCircle, Database, Bot, Building2, Mail, Zap, Briefcase } from "lucide-react";
 
 export interface NavigationProps {
   activeTab: string;
@@ -8,6 +8,7 @@ export interface NavigationProps {
   euCount?: number;
   templatesCount?: number;
   automationsUpcomingCount?: number;
+  applicationsCount?: number;
   isRunning?: boolean;
 }
 
@@ -18,6 +19,7 @@ export function Navigation({
   euCount,
   templatesCount,
   automationsUpcomingCount,
+  applicationsCount,
   isRunning,
 }: NavigationProps) {
   const tabs = [
@@ -63,6 +65,14 @@ export function Navigation({
       icon: Zap,
       badge: automationsUpcomingCount !== undefined && automationsUpcomingCount > 0 ? automationsUpcomingCount : null,
       badgeType: null,
+    },
+    {
+      id: "personal-jobs",
+      label: "My Job Applications",
+      icon: Briefcase,
+      badge: applicationsCount !== undefined ? `${applicationsCount} Sent` : "46 Sent",
+      badgeType: null,
+      badgeGradient: true,
     },
   ];
 

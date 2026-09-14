@@ -486,5 +486,7 @@ export const api = {
     }).toString();
     return fetchJson<{ status: string; count: number; data: any[] }>(`/api/personal/search-jobs?${q}`);
   },
+  getPersonalApplications: () =>
+    fetchJson<{ status: string; count: number; data: any[] }>("/api/personal/applications"),
 };
 
